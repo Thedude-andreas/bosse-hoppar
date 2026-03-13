@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bosse Hoppar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="hud">
+      <div>
+        <p class="eyebrow">Webbspel</p>
+        <h1>Bosse Hoppar</h1>
+      </div>
+      <div class="scoreboard">
+        <div class="score-card">
+          <span>Bana</span>
+          <strong id="level-label">Äng</strong>
+        </div>
+        <div class="score-card">
+          <span>Poäng</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="score-card">
+          <span>Bästa</span>
+          <strong id="best-score">0</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="game-shell">
+      <canvas id="game" width="960" height="420" aria-label="Spelplan för Bosse Hoppar"></canvas>
+
+      <div class="overlay" id="start-overlay">
+        <div class="panel">
+          <h2>Hjälp Bosse springa</h2>
+          <p>Hoppa över gula mjukis-elefanter, akta Sigge och ta morötter för bonus.</p>
+          <p>Fånga en flygande smiley för att nå nästa bana: en Pacman-lik labyrint.</p>
+          <p><strong>Mellanslag</strong>, <strong>pil upp</strong> eller <strong>klick</strong> för att hoppa. I labyrinten styr du med piltangenter eller WASD.</p>
+          <button id="start-button" type="button">Starta spelet</button>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="game-over-overlay">
+        <div class="panel">
+          <h2>Oj! Bosse snubblade.</h2>
+          <p id="final-score">Du fick 0 poäng.</p>
+          <button id="restart-button" type="button">Spela igen</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="touch-controls" aria-label="Mobila spelkontroller">
+      <div class="touch-pad">
+        <button class="touch-button touch-dir" data-dir="ArrowUp" type="button">Upp</button>
+        <div class="touch-row">
+          <button class="touch-button touch-dir" data-dir="ArrowLeft" type="button">Vänster</button>
+          <button class="touch-button touch-dir" data-dir="ArrowDown" type="button">Ner</button>
+          <button class="touch-button touch-dir" data-dir="ArrowRight" type="button">Höger</button>
+        </div>
+      </div>
+      <button class="touch-button touch-action" id="jump-button" type="button">Hoppa</button>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
