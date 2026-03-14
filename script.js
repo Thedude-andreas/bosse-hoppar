@@ -924,45 +924,86 @@ function drawMazeLegend() {
 function drawBunnyShape(x, y, jumpStretch) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = "#c9cdd3";
+  const earDrop = jumpStretch * 2;
+  const fur = ctx.createLinearGradient(6, 0, 62, 96);
+  fur.addColorStop(0, "#8da0ba");
+  fur.addColorStop(0.45, "#71839d");
+  fur.addColorStop(1, "#5d6f87");
+  const innerFur = ctx.createLinearGradient(24, 18, 40, 96);
+  innerFur.addColorStop(0, "#f1f2f0");
+  innerFur.addColorStop(1, "#dce0e1");
+
+  ctx.fillStyle = fur;
   ctx.beginPath();
-  ctx.ellipse(38, 48, 30, 24, 0, 0, Math.PI * 2);
+  ctx.ellipse(38, 18, 17, 15, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(55, 28, 18, 16, 0, 0, Math.PI * 2);
+  ctx.ellipse(38, 55, 23, 34, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  const earBob = jumpStretch * 8;
   ctx.beginPath();
-  ctx.ellipse(46, 4 - earBob, 8, 24, -0.2, 0, Math.PI * 2);
-  ctx.ellipse(62, 2 - earBob, 8, 26, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(18, 30 + earDrop, 8, 24, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(58, 31 + earDrop, 8, 24, -0.08, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#fdfdfd";
+  ctx.fillStyle = "#c6cdd4";
   ctx.beginPath();
-  ctx.ellipse(34, 51, 14, 14, 0, 0, Math.PI * 2);
+  ctx.ellipse(18, 34 + earDrop, 5.5, 19, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(58, 35 + earDrop, 5.5, 19, -0.08, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#f5c8d4";
+  ctx.fillStyle = innerFur;
   ctx.beginPath();
-  ctx.ellipse(46, 13 - earBob, 3, 12, -0.2, 0, Math.PI * 2);
-  ctx.ellipse(62, 11 - earBob, 3, 13, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(38, 26, 11, 8.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(38, 60, 16, 31, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#2c3b42";
+  ctx.fillStyle = fur;
   ctx.beginPath();
-  ctx.arc(59, 27, 2.8, 0, Math.PI * 2);
+  ctx.ellipse(18, 58, 6.5, 15, 0.18, 0, Math.PI * 2);
+  ctx.ellipse(58, 58, 6.5, 15, -0.18, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "#2c3b42";
-  ctx.lineWidth = 2;
+
+  ctx.fillStyle = "#e8eceb";
   ctx.beginPath();
-  ctx.moveTo(65, 33);
-  ctx.lineTo(72, 31);
+  ctx.ellipse(20, 92, 11, 8.5, 0.08, 0, Math.PI * 2);
+  ctx.ellipse(56, 92, 11, 8.5, -0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f0f2ef";
+  ctx.beginPath();
+  ctx.ellipse(38, 31, 9, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#313942";
+  ctx.beginPath();
+  ctx.arc(32, 20.5, 1.6, 0, Math.PI * 2);
+  ctx.arc(44, 20.5, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#8f86af";
+  ctx.beginPath();
+  ctx.ellipse(38, 25.8, 5.8, 4.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#6b7180";
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(33.5, 31.5);
+  ctx.quadraticCurveTo(38, 33.5, 42.5, 31.5);
   ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(16, 58, 7, 0, Math.PI * 2);
-  ctx.fillStyle = "#e9eef2";
-  ctx.fill();
+  ctx.moveTo(27, 6);
+  ctx.lineTo(33, 1);
+  ctx.moveTo(49, 6);
+  ctx.lineTo(43, 1);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -973,39 +1014,63 @@ function drawElephant(x, y, width, height, mazeMode) {
   ctx.save();
   ctx.translate(x, top);
   ctx.scale(scaleX, scaleY);
+  const plush = ctx.createLinearGradient(8, 6, 58, 46);
+  plush.addColorStop(0, mazeMode ? "#f6db55" : "#f6de67");
+  plush.addColorStop(1, mazeMode ? "#e7c52f" : "#edcf49");
 
-  ctx.fillStyle = mazeMode ? "#f1c92c" : "#f4d43f";
+  ctx.fillStyle = plush;
   ctx.beginPath();
-  ctx.roundRect(10, 15, 44, 24, 10);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(16, 20, 12, 0, Math.PI * 2);
-  ctx.arc(50, 20, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(58, 24, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(60, 22, 10, 20, 8);
+  ctx.ellipse(34, 22, 17, 13, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#2c3b42";
   ctx.beginPath();
-  ctx.arc(61, 21, 2.5, 0, Math.PI * 2);
+  ctx.ellipse(22, 20, 12, 15, -0.2, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = "#d9ac12";
-  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(13, 16);
+  ctx.quadraticCurveTo(6, 4, 16, 6);
+  ctx.quadraticCurveTo(24, 8, 26, 16);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(43, 18);
+  ctx.quadraticCurveTo(57, 4, 63, 11);
+  ctx.quadraticCurveTo(68, 18, 63, 25);
+  ctx.quadraticCurveTo(57, 21, 55, 28);
+  ctx.quadraticCurveTo(52, 35, 48, 27);
+  ctx.quadraticCurveTo(44, 20, 43, 18);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(31, 39, 18, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#232b34";
+  ctx.beginPath();
+  ctx.arc(39, 19, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#dfbb27";
+  ctx.lineWidth = 4.2;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(18, 38);
-  ctx.lineTo(18, 49);
-  ctx.moveTo(31, 38);
-  ctx.lineTo(31, 49);
-  ctx.moveTo(45, 38);
-  ctx.lineTo(45, 49);
-  ctx.moveTo(57, 38);
-  ctx.lineTo(57, 49);
+  ctx.moveTo(18, 45);
+  ctx.lineTo(18, 51);
+  ctx.moveTo(29, 46);
+  ctx.lineTo(29, 52);
+  ctx.moveTo(39, 45);
+  ctx.lineTo(39, 52);
+  ctx.moveTo(49, 43);
+  ctx.lineTo(49, 49);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(18, 13);
+  ctx.quadraticCurveTo(30, 8, 40, 14);
   ctx.stroke();
   ctx.restore();
 }
