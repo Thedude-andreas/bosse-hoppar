@@ -6,6 +6,7 @@ const levelLabelElement = document.getElementById("level-label");
 const startOverlay = document.getElementById("start-overlay");
 const gameOverOverlay = document.getElementById("game-over-overlay");
 const finalScoreElement = document.getElementById("final-score");
+const gameShell = document.getElementById("game-shell");
 const runnerButton = document.getElementById("runner-button");
 const mazeButton = document.getElementById("maze-button");
 const restartButton = document.getElementById("restart-button");
@@ -182,6 +183,7 @@ function showMenu() {
   scoreElement.textContent = "0";
   updateHud();
   updateMobileMode();
+  updateShellLayout();
   startOverlay.classList.remove("hidden");
   gameOverOverlay.classList.add("hidden");
 }
@@ -191,6 +193,7 @@ function startRunnerGame() {
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
   updateMobileMode();
+  updateShellLayout();
 }
 
 function startMazeGame() {
@@ -208,6 +211,7 @@ function startMazeGame() {
   updateMazeCamera();
   updateHud();
   updateMobileMode();
+  updateShellLayout();
 }
 
 function completeMazeLevel() {
@@ -220,6 +224,7 @@ function completeMazeLevel() {
   state.running = false;
   state.gameOver = true;
   persistBestScore();
+  updateShellLayout();
 }
 
 function endGame(message) {
@@ -230,6 +235,7 @@ function endGame(message) {
   restartButton.textContent = "Spela igen";
   gameOverOverlay.classList.remove("hidden");
   persistBestScore();
+  updateShellLayout();
 }
 
 function persistBestScore() {
@@ -262,6 +268,11 @@ function updateMobileMode() {
   const showJoystick = enabled && state.mode === "maze";
   joystick.classList.toggle("hidden", !showJoystick);
   joystick.setAttribute("aria-hidden", String(!showJoystick));
+}
+
+function updateShellLayout() {
+  const menuVisible = state.mode === "menu" || state.gameOver;
+  gameShell.classList.toggle("menu-open", menuVisible);
 }
 
 function jump() {
