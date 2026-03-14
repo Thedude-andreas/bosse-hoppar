@@ -261,11 +261,16 @@ function updateHud() {
 }
 
 function isLandscapeMobileMode() {
-  return window.matchMedia("(orientation: landscape)").matches;
+  return window.innerWidth > window.innerHeight;
 }
 
 function isTouchMobileMode() {
-  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
+    window.matchMedia("(pointer: coarse)").matches
+  );
 }
 
 function requestGameFullscreen() {
@@ -275,6 +280,10 @@ function requestGameFullscreen() {
   const target = document.documentElement;
   if (typeof target.requestFullscreen === "function") {
     target.requestFullscreen().catch(() => {});
+    return;
+  }
+  if (typeof target.webkitRequestFullscreen === "function") {
+    target.webkitRequestFullscreen();
   }
 }
 

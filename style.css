@@ -281,10 +281,12 @@ body.mobile-game {
 }
 
 body.mobile-game .app {
+  position: relative;
   width: 100vw;
   height: 100dvh;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 body.mobile-game .hud {
@@ -325,6 +327,9 @@ body.mobile-game .score-card strong {
 }
 
 body.mobile-game .game-shell {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
   height: 100dvh;
   border-radius: 0;
   box-shadow: none;
@@ -337,7 +342,7 @@ body.mobile-game canvas {
 }
 
 body.mobile-game .mobile-ui {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 4;
   pointer-events: none;
@@ -392,8 +397,8 @@ body.mobile-game .button-row button {
 }
 
 body.mobile-game.mobile-landscape .joystick {
-  right: 16px;
-  bottom: 14px;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
 }
 
 body.mobile-game:not(.mobile-landscape) .hud {
@@ -442,4 +447,16 @@ body.mobile-game:not(.mobile-landscape) .joystick-label {
 
 body.mobile-game:not(.mobile-landscape) .overlay {
   padding-top: 88px;
+}
+
+body.mobile-game.mobile-landscape .hud {
+  inset:
+    max(8px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    auto
+    max(12px, env(safe-area-inset-left));
+}
+
+body.mobile-game.mobile-landscape .score-card {
+  min-width: 92px;
 }
