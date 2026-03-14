@@ -117,10 +117,27 @@ function createMazeState() {
     },
     carrot: { x: 25, y: 15 },
     elephants: [
-      { cellX: 13, cellY: 1, px: 13, py: 1, dir: { x: -1, y: 0 }, speed: 0.88, retarget: 0, lastDir: { x: -1, y: 0 } },
-      { cellX: 9, cellY: 7, px: 9, py: 7, dir: { x: 0, y: 1 }, speed: 0.82, retarget: 0, lastDir: { x: 0, y: 1 } },
-      { cellX: 21, cellY: 11, px: 21, py: 11, dir: { x: -1, y: 0 }, speed: 0.8, retarget: 0, lastDir: { x: -1, y: 0 } },
+      createMazeElephant(13, 1, -1, 0, 2.1),
+      createMazeElephant(9, 7, 0, 1, 1.95),
+      createMazeElephant(21, 11, -1, 0, 1.9),
     ],
+  };
+}
+
+function createMazeElephant(cellX, cellY, dirX, dirY, speed) {
+  return {
+    cellX,
+    cellY,
+    px: cellX,
+    py: cellY,
+    dir: { x: dirX, y: dirY },
+    speed,
+    moving: false,
+    fromX: cellX,
+    fromY: cellY,
+    targetX: cellX,
+    targetY: cellY,
+    progress: 0,
   };
 }
 
@@ -417,13 +434,7 @@ function updateMaze(delta) {
   updateMazeBunny(bunny, delta);
 
   for (const elephant of maze.elephants) {
-    elephant.retarget -= delta;
-    if (elephant.retarget <= 0 || reachedCellCenter(elephant)) {
-      elephant.dir = chooseElephantDirection(elephant, bunny);
-      elephant.lastDir = { ...elephant.dir };
-      elephant.retarget = 220 + Math.random() * 240;
-    }
-    moveMazeActor(elephant, delta, false);
+    updateMazeElephant(elephant, delta);
 
     if (Math.hypot(elephant.px - bunny.px, elephant.py - bunny.py) < 0.45) {
       endGame(`Elefanterna åt nästan upp Bosse i labyrinten. Du fick ${state.score} poäng.`);
@@ -498,6 +509,90 @@ function startBunnyStep(bunny, dir) {
   bunny.targetY = bunny.cellY + dir.y;
   bunny.px = bunny.fromX;
   bunny.py = bunny.fromY;
+}
+
+function updateMazeElephant(elephant, delta) {
+  if (!elephant.moving) {
+    const chosenDir = pickElephantDirection(elephant);
+    if (chosenDir) {
+      startMazeStep(elephant, chosenDir);
+    }
+    return;
+  }
+
+  elephant.progress = Math.min(1, elephant.progress + elephant.speed * delta * 0.001);
+  elephant.px = lerp(elephant.fromX, elephant.targetX, elephant.progress);
+  elephant.py = lerp(elephant.fromY, elephant.targetY, elephant.progress);
+
+  if (elephant.progress < 1) {
+    return;
+  }
+
+  elephant.cellX = elephant.targetX;
+  elephant.cellY = elephant.targetY;
+  elephant.px = elephant.cellX;
+  elephant.py = elephant.cellY;
+  elephant.moving = false;
+
+  const chosenDir = pickElephantDirection(elephant);
+  if (chosenDir) {
+    startMazeStep(elephant, chosenDir);
+  } else {
+    elephant.dir = { x: 0, y: 0 };
+  }
+}
+
+function pickElephantDirection(elephant) {
+  const choices = getElephantChoices(elephant);
+  if (!choices.length) {
+    return null;
+  }
+
+  if (choices.length === 1) {
+    return choices[0];
+  }
+
+  const forward = choices.find((dir) => dir.x === elephant.dir.x && dir.y === elephant.dir.y);
+  const sideChoices = choices.filter((dir) => dir.x !== elephant.dir.x || dir.y !== elephant.dir.y);
+
+  if (sideChoices.length === 1 && forward) {
+    return sideChoices[0];
+  }
+
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function getElephantChoices(elephant) {
+  let choices = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+  ].filter((dir) => canMove(elephant.cellX, elephant.cellY, dir));
+
+  if (!choices.length) {
+    return choices;
+  }
+
+  const reverse = { x: -elephant.dir.x, y: -elephant.dir.y };
+  const nonReverseChoices = choices.filter((dir) => dir.x !== reverse.x || dir.y !== reverse.y);
+  if (nonReverseChoices.length) {
+    choices = nonReverseChoices;
+  }
+
+  return choices;
+}
+
+function startMazeStep(actor, dir) {
+  actor.dir = { ...dir };
+  actor.moving = true;
+  actor.progress = 0;
+  actor.fromX = actor.cellX;
+  actor.fromY = actor.cellY;
+  actor.targetX = actor.cellX + dir.x;
+  actor.targetY = actor.cellY + dir.y;
+  actor.px = actor.fromX;
+  actor.py = actor.fromY;
 }
 
 function moveMazeActor(actor, delta, useNextDir) {
@@ -602,41 +697,6 @@ function isOpenCell(x, y) {
     return false;
   }
   return mazeWalls[y][x] !== "#";
-}
-
-function chooseElephantDirection(elephant, bunny) {
-  let choices = [
-    { x: 1, y: 0 },
-    { x: -1, y: 0 },
-    { x: 0, y: 1 },
-    { x: 0, y: -1 },
-  ].filter((dir) => canMove(Math.round(elephant.px), Math.round(elephant.py), dir));
-
-  if (!choices.length) {
-    return { x: 0, y: 0 };
-  }
-
-  const reverse = { x: -elephant.dir.x, y: -elephant.dir.y };
-  const nonReverseChoices = choices.filter((dir) => dir.x !== reverse.x || dir.y !== reverse.y);
-  if (nonReverseChoices.length) {
-    choices = nonReverseChoices;
-  }
-
-  const scoredChoices = choices.map((dir) => {
-    const nextX = elephant.px + dir.x;
-    const nextY = elephant.py + dir.y;
-    const chaseScore = 8 - (Math.abs(nextX - bunny.px) + Math.abs(nextY - bunny.py));
-    const directionVariety = elephant.lastDir && dir.x === elephant.lastDir.x && dir.y === elephant.lastDir.y ? -0.6 : 0.7;
-    const randomScore = Math.random() * 2.4;
-    return {
-      dir,
-      score: chaseScore * (Math.random() < 0.55 ? 1 : 0.35) + directionVariety + randomScore,
-    };
-  });
-
-  scoredChoices.sort((a, b) => b.score - a.score);
-  const bestOptions = scoredChoices.slice(0, Math.min(3, scoredChoices.length));
-  return bestOptions[Math.floor(Math.random() * bestOptions.length)].dir;
 }
 
 function mazeToCanvasX(value) {
