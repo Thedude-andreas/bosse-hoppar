@@ -348,7 +348,7 @@ body.mobile-game .mobile-ui {
   pointer-events: none;
 }
 
-body.mobile-game .joystick {
+body.mobile-game .joystick:not(.hidden) {
   position: absolute;
   right: 16px;
   bottom: 14px;
