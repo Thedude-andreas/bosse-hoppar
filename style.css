@@ -25,7 +25,7 @@ body {
     linear-gradient(180deg, #a6e6ff 0%, #d7f3ff 48%, #effbe8 100%);
 }
 
-body.mobile-landscape {
+body.mobile-game {
   overflow: hidden;
 }
 
@@ -276,119 +276,170 @@ button:active {
   }
 }
 
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
-  body.mobile-landscape {
-    min-height: 100dvh;
-  }
+body.mobile-game {
+  min-height: 100dvh;
+}
 
-  body.mobile-landscape .app {
-    width: 100vw;
-    height: 100dvh;
-    margin: 0;
-    padding: 0;
-  }
+body.mobile-game .app {
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+}
 
-  body.mobile-landscape .hud {
-    position: absolute;
-    inset: 10px 10px auto 10px;
-    z-index: 5;
-    margin: 0;
-    align-items: start;
-    pointer-events: none;
-  }
+body.mobile-game .hud {
+  position: absolute;
+  inset: 10px 10px auto 10px;
+  z-index: 5;
+  margin: 0;
+  align-items: start;
+  pointer-events: none;
+}
 
-  body.mobile-landscape .hud > div,
-  body.mobile-landscape .scoreboard {
-    pointer-events: auto;
-  }
+body.mobile-game .hud > div,
+body.mobile-game .scoreboard {
+  pointer-events: auto;
+}
 
-  body.mobile-landscape h1 {
-    font-size: clamp(1.6rem, 4vw, 2.4rem);
-  }
+body.mobile-game h1 {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+}
 
-  body.mobile-landscape .eyebrow {
-    font-size: 0.72rem;
-  }
+body.mobile-game .eyebrow {
+  font-size: 0.72rem;
+}
 
-  body.mobile-landscape .scoreboard {
-    gap: 8px;
-  }
+body.mobile-game .scoreboard {
+  gap: 8px;
+}
 
-  body.mobile-landscape .score-card {
-    min-width: 84px;
-    padding: 8px 10px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.64);
-  }
+body.mobile-game .score-card {
+  min-width: 84px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+}
 
-  body.mobile-landscape .score-card strong {
-    font-size: 1.25rem;
-  }
+body.mobile-game .score-card strong {
+  font-size: 1.25rem;
+}
 
-  body.mobile-landscape .game-shell {
-    height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
-  }
+body.mobile-game .game-shell {
+  height: 100dvh;
+  border-radius: 0;
+  box-shadow: none;
+}
 
-  body.mobile-landscape canvas {
-    height: 100dvh;
-    width: 100vw;
-    object-fit: cover;
-  }
+body.mobile-game canvas {
+  height: 100dvh;
+  width: 100vw;
+  object-fit: cover;
+}
 
-  body.mobile-landscape .mobile-ui {
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    pointer-events: none;
-  }
+body.mobile-game .mobile-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
 
-  body.mobile-landscape .joystick {
-    position: absolute;
-    right: 16px;
-    bottom: 14px;
-    display: block;
-    pointer-events: auto;
-  }
+body.mobile-game .joystick {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: block;
+  pointer-events: auto;
+}
 
-  body.mobile-landscape .overlay {
-    z-index: 10;
-    padding: 64px 14px 18px;
-    align-content: center;
-    overflow: auto;
-  }
+body.mobile-game .overlay {
+  z-index: 10;
+  padding: 64px 14px 18px;
+  align-content: center;
+  overflow: auto;
+}
 
-  body.mobile-landscape .panel {
-    width: min(520px, calc(100vw - 28px));
-    max-width: 520px;
-    max-height: calc(100dvh - 92px);
-    padding: 18px 20px;
-    overflow: auto;
-  }
+body.mobile-game .panel {
+  width: min(520px, calc(100vw - 28px));
+  max-width: 520px;
+  max-height: calc(100dvh - 92px);
+  padding: 18px 20px;
+  overflow: auto;
+}
 
-  body.mobile-landscape .panel h2 {
-    font-size: 1.55rem;
-  }
+body.mobile-game .panel h2 {
+  font-size: 1.55rem;
+}
 
-  body.mobile-landscape .panel p {
-    font-size: 0.96rem;
-    line-height: 1.12;
-    margin: 6px 0;
-  }
+body.mobile-game .panel p {
+  font-size: 0.96rem;
+  line-height: 1.12;
+  margin: 6px 0;
+}
 
-  body.mobile-landscape .button-row {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 10px;
-  }
+body.mobile-game .button-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
 
-  body.mobile-landscape .button-row button {
-    flex: 1 1 180px;
-    margin-top: 0;
-    min-height: 48px;
-    padding: 10px 16px;
-    font-size: 1rem;
-  }
+body.mobile-game .button-row button {
+  flex: 1 1 180px;
+  margin-top: 0;
+  min-height: 48px;
+  padding: 10px 16px;
+  font-size: 1rem;
+}
+
+body.mobile-game.mobile-landscape .joystick {
+  right: 16px;
+  bottom: 14px;
+}
+
+body.mobile-game:not(.mobile-landscape) .hud {
+  inset: 8px 8px auto 8px;
+}
+
+body.mobile-game:not(.mobile-landscape) h1 {
+  font-size: clamp(1.35rem, 7vw, 2rem);
+}
+
+body.mobile-game:not(.mobile-landscape) .eyebrow {
+  font-size: 0.68rem;
+}
+
+body.mobile-game:not(.mobile-landscape) .score-card {
+  min-width: 0;
+  padding: 8px 8px;
+}
+
+body.mobile-game:not(.mobile-landscape) .score-card span {
+  font-size: 0.72rem;
+}
+
+body.mobile-game:not(.mobile-landscape) .score-card strong {
+  font-size: 1.15rem;
+}
+
+body.mobile-game:not(.mobile-landscape) .joystick {
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+body.mobile-game:not(.mobile-landscape) .joystick-base {
+  width: 108px;
+  height: 108px;
+}
+
+body.mobile-game:not(.mobile-landscape) .joystick-knob {
+  width: 46px;
+  height: 46px;
+}
+
+body.mobile-game:not(.mobile-landscape) .joystick-label {
+  display: none;
+}
+
+body.mobile-game:not(.mobile-landscape) .overlay {
+  padding-top: 88px;
 }

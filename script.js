@@ -189,6 +189,7 @@ function showMenu() {
 }
 
 function startRunnerGame() {
+  requestGameFullscreen();
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
@@ -197,6 +198,7 @@ function startRunnerGame() {
 }
 
 function startMazeGame() {
+  requestGameFullscreen();
   state.mode = "maze";
   state.selectedGame = "maze";
   state.running = true;
@@ -259,13 +261,30 @@ function updateHud() {
 }
 
 function isLandscapeMobileMode() {
-  return window.matchMedia("(hover: none) and (pointer: coarse) and (orientation: landscape)").matches;
+  return window.matchMedia("(orientation: landscape)").matches;
+}
+
+function isTouchMobileMode() {
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
+
+function requestGameFullscreen() {
+  if (!isTouchMobileMode() || document.fullscreenElement) {
+    return;
+  }
+  const target = document.documentElement;
+  if (typeof target.requestFullscreen === "function") {
+    target.requestFullscreen().catch(() => {});
+  }
 }
 
 function updateMobileMode() {
-  const enabled = isLandscapeMobileMode() && state.mode !== "menu";
-  document.body.classList.toggle("mobile-landscape", enabled);
-  const showJoystick = enabled && state.mode === "maze";
+  const inGame = state.mode !== "menu";
+  const touchMode = isTouchMobileMode() && inGame;
+  const landscapeMode = touchMode && isLandscapeMobileMode();
+  document.body.classList.toggle("mobile-game", touchMode);
+  document.body.classList.toggle("mobile-landscape", landscapeMode);
+  const showJoystick = touchMode && state.mode === "maze";
   joystick.classList.toggle("hidden", !showJoystick);
   joystick.setAttribute("aria-hidden", String(!showJoystick));
 }
