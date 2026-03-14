@@ -25,6 +25,10 @@ body {
     linear-gradient(180deg, #a6e6ff 0%, #d7f3ff 48%, #effbe8 100%);
 }
 
+body.mobile-landscape {
+  overflow: hidden;
+}
+
 .app {
   width: min(1100px, calc(100vw - 32px));
   margin: 0 auto;
@@ -157,39 +161,47 @@ button:active {
   transform: translateY(1px);
 }
 
-.touch-controls {
+.mobile-ui {
+  position: relative;
+}
+
+.joystick {
   display: none;
-  align-items: end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 14px;
 }
 
-.touch-pad {
-  display: grid;
-  gap: 10px;
+.joystick.hidden {
+  display: none;
 }
 
-.touch-row {
-  display: flex;
-  gap: 10px;
+.joystick-base {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: radial-gradient(circle, rgba(255,255,255,0.14), rgba(6, 20, 34, 0.38));
+  backdrop-filter: blur(5px);
+  touch-action: none;
 }
 
-.touch-button {
-  min-width: 74px;
-  min-height: 58px;
-  margin: 0;
-  padding: 0 16px;
-  border-radius: 22px;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, #fff5db, #ffb64f);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
-.touch-action {
-  min-width: 132px;
-  min-height: 126px;
-  align-self: stretch;
+.joystick-label {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 @media (max-width: 720px) {
@@ -222,10 +234,6 @@ button:active {
   .button-row {
     flex-direction: column;
   }
-
-  .touch-controls {
-    display: flex;
-  }
 }
 
 @media (max-width: 520px) {
@@ -250,20 +258,90 @@ button:active {
   .game-shell {
     border-radius: 20px;
   }
+}
 
-  .touch-controls {
-    gap: 10px;
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  body.mobile-landscape {
+    min-height: 100dvh;
   }
 
-  .touch-button {
-    min-width: 64px;
-    min-height: 52px;
-    border-radius: 18px;
-    font-size: 1rem;
+  body.mobile-landscape .app {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
   }
 
-  .touch-action {
-    min-width: 112px;
-    min-height: 114px;
+  body.mobile-landscape .hud {
+    position: absolute;
+    inset: 10px 10px auto 10px;
+    z-index: 5;
+    margin: 0;
+    align-items: start;
+    pointer-events: none;
+  }
+
+  body.mobile-landscape .hud > div,
+  body.mobile-landscape .scoreboard {
+    pointer-events: auto;
+  }
+
+  body.mobile-landscape h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+  }
+
+  body.mobile-landscape .eyebrow {
+    font-size: 0.72rem;
+  }
+
+  body.mobile-landscape .scoreboard {
+    gap: 8px;
+  }
+
+  body.mobile-landscape .score-card {
+    min-width: 84px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.64);
+  }
+
+  body.mobile-landscape .score-card strong {
+    font-size: 1.25rem;
+  }
+
+  body.mobile-landscape .game-shell {
+    height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  body.mobile-landscape canvas {
+    height: 100dvh;
+    width: 100vw;
+    object-fit: cover;
+  }
+
+  body.mobile-landscape .mobile-ui {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  body.mobile-landscape .joystick {
+    position: absolute;
+    right: 16px;
+    bottom: 14px;
+    display: block;
+    pointer-events: auto;
+  }
+
+  body.mobile-landscape .overlay {
+    z-index: 10;
+  }
+
+  body.mobile-landscape .panel {
+    max-width: 360px;
+    padding: 20px 22px;
   }
 }

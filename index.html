@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260314-3">
+  <link rel="stylesheet" href="style.css?v=20260314-4">
 </head>
 <body>
   <main class="app">
@@ -59,19 +59,16 @@
       </div>
     </section>
 
-    <section class="touch-controls" aria-label="Mobila spelkontroller">
-      <div class="touch-pad">
-        <button class="touch-button touch-dir" data-dir="ArrowUp" type="button">Upp</button>
-        <div class="touch-row">
-          <button class="touch-button touch-dir" data-dir="ArrowLeft" type="button">Vänster</button>
-          <button class="touch-button touch-dir" data-dir="ArrowDown" type="button">Ner</button>
-          <button class="touch-button touch-dir" data-dir="ArrowRight" type="button">Höger</button>
+    <section class="mobile-ui" aria-label="Mobila spelkontroller">
+      <div class="joystick hidden" id="joystick" aria-hidden="true">
+        <div class="joystick-base" id="joystick-base">
+          <div class="joystick-knob" id="joystick-knob"></div>
         </div>
+        <p class="joystick-label">Styr Bosse Vimsar med höger tumme</p>
       </div>
-      <button class="touch-button touch-action" id="jump-button" type="button">Hoppa</button>
     </section>
   </main>
 
-  <script src="script.js?v=20260314-3"></script>
+  <script src="script.js?v=20260314-4"></script>
 </body>
 </html>

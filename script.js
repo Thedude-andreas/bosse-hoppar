@@ -10,8 +10,9 @@ const runnerButton = document.getElementById("runner-button");
 const mazeButton = document.getElementById("maze-button");
 const restartButton = document.getElementById("restart-button");
 const menuButton = document.getElementById("menu-button");
-const jumpButton = document.getElementById("jump-button");
-const directionButtons = Array.from(document.querySelectorAll(".touch-dir"));
+const joystick = document.getElementById("joystick");
+const joystickBase = document.getElementById("joystick-base");
+const joystickKnob = document.getElementById("joystick-knob");
 
 const groundY = 330;
 const gravity = 0.82;
@@ -61,6 +62,10 @@ const directions = {
   KeyW: { x: 0, y: -1 },
   ArrowDown: { x: 0, y: 1 },
   KeyS: { x: 0, y: 1 },
+};
+const joystickState = {
+  active: false,
+  pointerId: null,
 };
 
 const state = {
@@ -176,6 +181,7 @@ function showMenu() {
   state.score = 0;
   scoreElement.textContent = "0";
   updateHud();
+  updateMobileMode();
   startOverlay.classList.remove("hidden");
   gameOverOverlay.classList.add("hidden");
 }
@@ -184,6 +190,7 @@ function startRunnerGame() {
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  updateMobileMode();
 }
 
 function startMazeGame() {
@@ -200,6 +207,7 @@ function startMazeGame() {
   gameOverOverlay.classList.add("hidden");
   updateMazeCamera();
   updateHud();
+  updateMobileMode();
 }
 
 function completeMazeLevel() {
@@ -242,6 +250,18 @@ function updateHud() {
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
+}
+
+function isLandscapeMobileMode() {
+  return window.matchMedia("(hover: none) and (pointer: coarse) and (orientation: landscape)").matches;
+}
+
+function updateMobileMode() {
+  const enabled = isLandscapeMobileMode() && state.mode !== "menu";
+  document.body.classList.toggle("mobile-landscape", enabled);
+  const showJoystick = enabled && state.mode === "maze";
+  joystick.classList.toggle("hidden", !showJoystick);
+  joystick.setAttribute("aria-hidden", String(!showJoystick));
 }
 
 function jump() {
@@ -1211,19 +1231,75 @@ menuButton.addEventListener("click", () => {
   showMenu();
 });
 
-jumpButton.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-  if (state.mode === "runner") {
-    handleRunnerJump();
+joystickBase.addEventListener("pointerdown", (event) => {
+  if (state.mode !== "maze") {
+    return;
   }
+  event.preventDefault();
+  joystickState.active = true;
+  joystickState.pointerId = event.pointerId;
+  joystickBase.setPointerCapture(event.pointerId);
+  updateJoystickFromPoint(event.clientX, event.clientY);
 });
 
-for (const button of directionButtons) {
-  button.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    handleMazeDirection(button.dataset.dir);
-  });
+joystickBase.addEventListener("pointermove", (event) => {
+  if (!joystickState.active || joystickState.pointerId !== event.pointerId) {
+    return;
+  }
+  event.preventDefault();
+  updateJoystickFromPoint(event.clientX, event.clientY);
+});
+
+function releaseJoystick(pointerId) {
+  joystickState.active = false;
+  joystickState.pointerId = null;
+  resetJoystick();
+  if (pointerId !== null && joystickBase.hasPointerCapture(pointerId)) {
+    joystickBase.releasePointerCapture(pointerId);
+  }
 }
+
+joystickBase.addEventListener("pointerup", (event) => {
+  releaseJoystick(event.pointerId);
+});
+
+joystickBase.addEventListener("pointercancel", (event) => {
+  releaseJoystick(event.pointerId);
+});
+
+function updateJoystickFromPoint(clientX, clientY) {
+  const rect = joystickBase.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const rawX = clientX - centerX;
+  const rawY = clientY - centerY;
+  const radius = rect.width * 0.5;
+  const maxDistance = radius - 28;
+  const distance = Math.hypot(rawX, rawY);
+  const limited = distance > maxDistance && distance > 0
+    ? maxDistance / distance
+    : 1;
+  const knobX = rawX * limited;
+  const knobY = rawY * limited;
+  joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+
+  if (distance < 18) {
+    return;
+  }
+
+  if (Math.abs(rawX) > Math.abs(rawY)) {
+    handleMazeDirection(rawX > 0 ? "ArrowRight" : "ArrowLeft");
+  } else {
+    handleMazeDirection(rawY > 0 ? "ArrowDown" : "ArrowUp");
+  }
+}
+
+function resetJoystick() {
+  joystickKnob.style.transform = "translate(-50%, -50%)";
+}
+
+window.addEventListener("resize", updateMobileMode);
+window.addEventListener("orientationchange", updateMobileMode);
 
 showMenu();
 requestAnimationFrame(frame);
