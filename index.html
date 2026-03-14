@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bosse Hoppar</title>
+  <title>Majkens spelhala</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260314-1">
+  <link rel="stylesheet" href="style.css?v=20260314-2">
 </head>
 <body>
   <main class="app">
     <section class="hud">
       <div>
         <p class="eyebrow">Webbspel</p>
-        <h1>Bosse Hoppar</h1>
+        <h1>Majkens spelhala</h1>
       </div>
       <div class="scoreboard">
         <div class="score-card">
-          <span>Bana</span>
-          <strong id="level-label">Äng</strong>
+          <span>Spel</span>
+          <strong id="level-label">Valj</strong>
         </div>
         <div class="score-card">
           <span>Poäng</span>
@@ -37,11 +37,13 @@
 
       <div class="overlay" id="start-overlay">
         <div class="panel">
-          <h2>Hjälp Bosse springa</h2>
-          <p>Hoppa över gula mjukis-elefanter, akta Sigge och ta morötter för bonus.</p>
-          <p>Fånga en flygande smiley för att nå nästa bana: en Pacman-lik labyrint.</p>
-          <p><strong>Mellanslag</strong>, <strong>pil upp</strong> eller <strong>klick</strong> för att hoppa. I labyrinten styr du med piltangenter eller WASD.</p>
-          <button id="start-button" type="button">Starta spelet</button>
+          <h2>Valj spel</h2>
+          <p>Bosse Hoppar ar ett hoppspel med elefanter, Sigge och morotter.</p>
+          <p>Bosse Vimsar ar ett eget labyrintspel dar Bosse letar moroten och undviker elefanter.</p>
+          <div class="button-row">
+            <button id="runner-button" type="button">Bosse Hoppar</button>
+            <button id="maze-button" type="button">Bosse Vimsar</button>
+          </div>
         </div>
       </div>
 
@@ -49,7 +51,10 @@
         <div class="panel">
           <h2>Oj! Bosse snubblade.</h2>
           <p id="final-score">Du fick 0 poäng.</p>
-          <button id="restart-button" type="button">Spela igen</button>
+          <div class="button-row">
+            <button id="restart-button" type="button">Spela igen</button>
+            <button id="menu-button" type="button">Till spelval</button>
+          </div>
         </div>
       </div>
     </section>
@@ -67,6 +72,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260314-1"></script>
+  <script src="script.js?v=20260314-2"></script>
 </body>
 </html>

@@ -127,6 +127,14 @@ canvas {
   line-height: 1.2;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 button {
   margin-top: 14px;
   border: 0;
@@ -209,6 +217,10 @@ button:active {
 
   .panel p {
     font-size: 1rem;
+  }
+
+  .button-row {
+    flex-direction: column;
   }
 
   .touch-controls {

@@ -6,8 +6,10 @@ const levelLabelElement = document.getElementById("level-label");
 const startOverlay = document.getElementById("start-overlay");
 const gameOverOverlay = document.getElementById("game-over-overlay");
 const finalScoreElement = document.getElementById("final-score");
-const startButton = document.getElementById("start-button");
+const runnerButton = document.getElementById("runner-button");
+const mazeButton = document.getElementById("maze-button");
 const restartButton = document.getElementById("restart-button");
+const menuButton = document.getElementById("menu-button");
 const jumpButton = document.getElementById("jump-button");
 const directionButtons = Array.from(document.querySelectorAll(".touch-dir"));
 
@@ -18,7 +20,6 @@ const baseSpeed = 6.2;
 const elephantInterval = 1350;
 const carrotInterval = 2900;
 const siggeInterval = 4200;
-const smileyInterval = 5400;
 const bestScoreKey = "bosse-hoppar-best-score";
 const mazeCell = 40;
 const mazeWalls = [
@@ -67,14 +68,14 @@ const state = {
   gameOver: false,
   score: 0,
   bestScore: Number(localStorage.getItem(bestScoreKey) || 0),
-  mode: "runner",
+  mode: "menu",
+  selectedGame: null,
   distance: 0,
   speed: baseSpeed,
   lastTime: 0,
   elephantTimer: 0,
   carrotTimer: 1200,
   siggeTimer: 2600,
-  smileyTimer: 3200,
   cloudsOffset: 0,
   pettingTimer: 0,
   mazeMessageTimer: 0,
@@ -89,7 +90,6 @@ const state = {
   elephants: [],
   carrots: [],
   sigges: [],
-  smileys: [],
   maze: createMazeState(),
 };
 
@@ -143,6 +143,7 @@ function createMazeElephant(cellX, cellY, dirX, dirY, speed) {
 
 function resetRunnerState(resetScore) {
   state.mode = "runner";
+  state.selectedGame = "runner";
   state.running = true;
   state.gameOver = false;
   state.distance = 0;
@@ -151,14 +152,12 @@ function resetRunnerState(resetScore) {
   state.elephantTimer = 0;
   state.carrotTimer = 1200;
   state.siggeTimer = 2600;
-  state.smileyTimer = 3200;
   state.cloudsOffset = 0;
   state.pettingTimer = 0;
   state.mazeMessageTimer = 0;
   state.elephants = [];
   state.carrots = [];
   state.sigges = [];
-  state.smileys = [];
   state.bunny.y = groundY;
   state.bunny.velocityY = 0;
   state.bunny.jumpStretch = 0;
@@ -169,19 +168,36 @@ function resetRunnerState(resetScore) {
   updateHud();
 }
 
-function startGame() {
+function showMenu() {
+  state.mode = "menu";
+  state.selectedGame = null;
+  state.running = false;
+  state.gameOver = false;
+  state.score = 0;
+  scoreElement.textContent = "0";
+  updateHud();
+  startOverlay.classList.remove("hidden");
+  gameOverOverlay.classList.add("hidden");
+}
+
+function startRunnerGame() {
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
 }
 
-function startMazeLevel() {
+function startMazeGame() {
   state.mode = "maze";
+  state.selectedGame = "maze";
   state.running = true;
   state.gameOver = false;
+  state.score = 0;
+  scoreElement.textContent = "0";
   state.lastTime = 0;
   state.mazeMessageTimer = 1600;
   state.maze = createMazeState();
+  startOverlay.classList.add("hidden");
+  gameOverOverlay.classList.add("hidden");
   updateMazeCamera();
   updateHud();
 }
@@ -192,10 +208,9 @@ function completeMazeLevel() {
   finalScoreElement.textContent = `Bosse hittade moroten i labyrinten och fick totalt ${state.score} poäng.`;
   gameOverOverlay.classList.remove("hidden");
   gameOverOverlay.querySelector("h2").textContent = "Bana klar!";
-  restartButton.textContent = "Tillbaka till ängen";
+  restartButton.textContent = "Spela igen";
   state.running = false;
   state.gameOver = true;
-  state.mode = "runner-win";
   persistBestScore();
 }
 
@@ -218,10 +233,14 @@ function persistBestScore() {
 }
 
 function updateHud() {
+  if (state.mode === "menu") {
+    levelLabelElement.textContent = "Valj";
+    return;
+  }
   if (state.mode === "maze") {
-    levelLabelElement.textContent = "Labyrint";
+    levelLabelElement.textContent = "Vimsar";
   } else {
-    levelLabelElement.textContent = "Äng";
+    levelLabelElement.textContent = "Hoppar";
   }
 }
 
@@ -246,9 +265,9 @@ function handleMazeDirection(code) {
 
 function handleRunnerJump() {
   if (!state.running && !state.gameOver) {
-    startGame();
+    startRunnerGame();
   } else if (state.gameOver) {
-    startGame();
+    startRunnerGame();
   }
   jump();
 }
@@ -318,28 +337,11 @@ function updateRunner(delta) {
     state.siggeTimer = 0;
   }
 
-  state.smileyTimer += delta;
-  if (state.smileyTimer > smileyInterval) {
-    state.smileys.push({
-      x: canvas.width + 100,
-      y: 130 + Math.random() * 120,
-      width: 36,
-      height: 36,
-      phase: Math.random() * Math.PI * 2,
-    });
-    state.smileyTimer = 0;
-  }
-
   for (const elephant of state.elephants) {
     elephant.x -= state.speed;
   }
   for (const carrot of state.carrots) {
     carrot.x -= state.speed + 0.8;
-  }
-  for (const smiley of state.smileys) {
-    smiley.x -= state.speed + 1.3;
-    smiley.phase += delta * 0.008;
-    smiley.y += Math.sin(smiley.phase) * 0.8;
   }
   for (const sigge of state.sigges) {
     sigge.x -= state.speed * 0.72;
@@ -360,7 +362,6 @@ function updateRunner(delta) {
   state.elephants = state.elephants.filter((elephant) => elephant.x + elephant.width > -30);
   state.carrots = state.carrots.filter((carrot) => carrot.x + carrot.width > -20 && !carrot.collected);
   state.sigges = state.sigges.filter((sigge) => sigge.x + sigge.width > -30);
-  state.smileys = state.smileys.filter((smiley) => smiley.x + smiley.width > -30);
 
   const bunnyHitbox = {
     x: bunny.x + 12,
@@ -403,20 +404,6 @@ function updateRunner(delta) {
       sigge.petted = true;
       state.pettingTimer = 900;
       state.score = Math.max(0, state.score - 10);
-    }
-  }
-
-  for (const smiley of state.smileys) {
-    if (intersects(bunnyHitbox, {
-      x: smiley.x,
-      y: smiley.y,
-      width: smiley.width,
-      height: smiley.height,
-    })) {
-      state.score += 40;
-      scoreElement.textContent = String(state.score);
-      startMazeLevel();
-      return;
     }
   }
 
@@ -737,9 +724,6 @@ function drawRunner() {
   for (const carrot of state.carrots) {
     drawCarrot(carrot);
   }
-  for (const smiley of state.smileys) {
-    drawSmiley(smiley);
-  }
   for (const sigge of state.sigges) {
     drawSigge(sigge);
   }
@@ -752,7 +736,7 @@ function drawRunner() {
   ctx.font = "700 22px 'Baloo 2'";
   const hint = state.pettingTimer > 0
     ? "Bosse klappar Sigge... tiden tickar medan han gosar."
-    : "Hoppa över elefanter, ta morötter och fånga en smiley för labyrinten.";
+    : "Hoppa over elefanter, akta Sigge och ta morotter.";
   ctx.fillText(hint, 28, 38);
 }
 
@@ -1189,15 +1173,14 @@ document.addEventListener("keydown", (event) => {
 
   if (event.code === "Space" || event.code === "ArrowUp") {
     event.preventDefault();
-    if (!state.running && !state.gameOver) {
-      startGame();
-    } else if (state.gameOver && state.mode !== "maze") {
-      startGame();
-    } else if (state.gameOver && state.mode === "runner-win") {
-      resetRunnerState(false);
-      gameOverOverlay.classList.add("hidden");
+    if (state.mode === "runner") {
+      if (!state.running && !state.gameOver) {
+        startRunnerGame();
+      } else if (state.gameOver) {
+        startRunnerGame();
+      }
+      jump();
     }
-    jump();
   }
 });
 
@@ -1207,19 +1190,25 @@ canvas.addEventListener("pointerdown", () => {
   }
 });
 
-startButton.addEventListener("click", () => {
-  startGame();
-  jump();
+runnerButton.addEventListener("click", () => {
+  startRunnerGame();
+});
+
+mazeButton.addEventListener("click", () => {
+  startMazeGame();
 });
 
 restartButton.addEventListener("click", () => {
   gameOverOverlay.classList.add("hidden");
-  if (state.mode === "runner-win") {
-    resetRunnerState(false);
-    state.running = true;
+  if (state.selectedGame === "maze") {
+    startMazeGame();
   } else {
-    startGame();
+    startRunnerGame();
   }
+});
+
+menuButton.addEventListener("click", () => {
+  showMenu();
 });
 
 jumpButton.addEventListener("pointerdown", (event) => {
@@ -1236,4 +1225,5 @@ for (const button of directionButtons) {
   });
 }
 
+showMenu();
 requestAnimationFrame(frame);
