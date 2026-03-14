@@ -317,11 +317,12 @@ function update(delta) {
 
 function updateRunner(delta) {
   const bunny = state.bunny;
+  const frameScale = delta / (1000 / 60);
   state.distance += delta * 0.01;
   const targetSpeed = baseSpeed + Math.min(5, state.distance * 0.018);
   const pettingSlowdown = state.pettingTimer > 0 ? 2.8 : 0;
   state.speed = Math.max(2.4, targetSpeed - pettingSlowdown);
-  state.cloudsOffset += state.speed * 0.15;
+  state.cloudsOffset += state.speed * 0.15 * frameScale;
 
   if (state.pettingTimer > 0) {
     state.pettingTimer = Math.max(0, state.pettingTimer - delta);
@@ -369,13 +370,13 @@ function updateRunner(delta) {
   }
 
   for (const elephant of state.elephants) {
-    elephant.x -= state.speed;
+    elephant.x -= state.speed * frameScale;
   }
   for (const carrot of state.carrots) {
-    carrot.x -= state.speed + 0.8;
+    carrot.x -= (state.speed + 0.8) * frameScale;
   }
   for (const sigge of state.sigges) {
-    sigge.x -= state.speed * 0.72;
+    sigge.x -= state.speed * 0.72 * frameScale;
     sigge.nextHopIn -= delta;
     if (sigge.nextHopIn <= 0) {
       sigge.hopTimer = 520;
