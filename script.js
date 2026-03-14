@@ -234,7 +234,7 @@ function persistBestScore() {
 
 function updateHud() {
   if (state.mode === "menu") {
-    levelLabelElement.textContent = "Valj";
+    levelLabelElement.textContent = "Välj";
     return;
   }
   if (state.mode === "maze") {
@@ -736,7 +736,7 @@ function drawRunner() {
   ctx.font = "700 22px 'Baloo 2'";
   const hint = state.pettingTimer > 0
     ? "Bosse klappar Sigge... tiden tickar medan han gosar."
-    : "Hoppa over elefanter, akta Sigge och ta morotter.";
+    : "Hoppa över elefanter, akta Sigge och ta morötter.";
   ctx.fillText(hint, 28, 38);
 }
 
