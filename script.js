@@ -274,7 +274,7 @@ function isTouchMobileMode() {
 }
 
 function requestGameFullscreen() {
-  if (!isTouchMobileMode() || document.fullscreenElement) {
+  if (!isTouchMobileMode() || !isLandscapeMobileMode() || document.fullscreenElement) {
     return;
   }
   const target = document.documentElement;
@@ -289,11 +289,10 @@ function requestGameFullscreen() {
 
 function updateMobileMode() {
   const inGame = state.mode !== "menu";
-  const touchMode = isTouchMobileMode() && inGame;
-  const landscapeMode = touchMode && isLandscapeMobileMode();
-  document.body.classList.toggle("mobile-game", touchMode);
+  const landscapeMode = isTouchMobileMode() && inGame && isLandscapeMobileMode();
+  document.body.classList.toggle("mobile-game", landscapeMode);
   document.body.classList.toggle("mobile-landscape", landscapeMode);
-  const showJoystick = touchMode && state.mode === "maze";
+  const showJoystick = landscapeMode && state.mode === "maze";
   joystick.classList.toggle("hidden", !showJoystick);
   joystick.setAttribute("aria-hidden", String(!showJoystick));
 }
