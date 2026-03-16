@@ -403,6 +403,7 @@ function finishMazeAdventure() {
   finalScoreElement.textContent = `Bosse klarade alla 10 banor och samlade ihop ${state.score} poäng i labyrinten.`;
   gameOverOverlay.querySelector("h2").textContent = "Alla banor klara!";
   restartButton.textContent = "Spela från bana 1";
+  restartButton.dataset.action = "maze-reset";
   gameOverOverlay.classList.remove("hidden");
   persistBestScore();
   updateShellLayout();
@@ -414,6 +415,7 @@ function endGame(message) {
   finalScoreElement.textContent = message || `Du fick ${state.score} poäng.`;
   gameOverOverlay.querySelector("h2").textContent = "Oj! Bosse snubblade.";
   restartButton.textContent = "Spela igen";
+  restartButton.dataset.action = "retry-current";
   gameOverOverlay.classList.remove("hidden");
   persistBestScore();
   updateShellLayout();
@@ -795,18 +797,6 @@ function pickElephantDirection(elephant) {
   if (!choices.length) {
     return null;
   }
-
-  if (choices.length === 1) {
-    return choices[0];
-  }
-
-  const forward = choices.find((dir) => dir.x === elephant.dir.x && dir.y === elephant.dir.y);
-  const sideChoices = choices.filter((dir) => dir.x !== elephant.dir.x || dir.y !== elephant.dir.y);
-
-  if (sideChoices.length === 1 && forward) {
-    return sideChoices[0];
-  }
-
   return choices[Math.floor(Math.random() * choices.length)];
 }
 
@@ -1518,7 +1508,11 @@ mazeButton.addEventListener("click", () => {
 restartButton.addEventListener("click", () => {
   gameOverOverlay.classList.add("hidden");
   if (state.selectedGame === "maze") {
-    startMazeGame();
+    if (restartButton.dataset.action === "maze-reset") {
+      startMazeGame();
+    } else {
+      loadMazeLevel(state.maze.levelIndex, false);
+    }
   } else {
     startRunnerGame();
   }
