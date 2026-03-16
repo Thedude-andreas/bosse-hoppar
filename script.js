@@ -24,27 +24,19 @@ const carrotInterval = 2900;
 const siggeInterval = 4200;
 const bestScoreKey = "bosse-hoppar-best-score";
 const mazeCell = 40;
-const mazeWalls = [
-  "#############################",
-  "#...........#.......#.......#",
-  "#.#####.###.#.###.#.#.###.#.#",
-  "#.#...#...#.#...#.#...#...#.#",
-  "#.#.#.###.#.###.#.#####.###.#",
-  "#...#.....#.....#.....#.....#",
-  "###.#####.#####.#####.#.###.#",
-  "#...#...#.....#...#...#.#...#",
-  "#.###.#.#####.###.#.###.#.###",
-  "#.....#...#.....#.#.....#...#",
-  "#.#######.#.###.#.#####.###.#",
-  "#.#.......#.#...#.....#.....#",
-  "#.#.#######.#.#######.#####.#",
-  "#...#.......#.....#...#.....#",
-  "###.#.###########.#.###.###.#",
-  "#.....#...........#.....#...#",
-  "#############################",
+const totalMazeLevels = 10;
+const mazeLevels = [
+  { cols: 13, rows: 11, carrots: 3, elephants: 2, carrotPoints: 20, clearBonus: 120 },
+  { cols: 15, rows: 11, carrots: 3, elephants: 3, carrotPoints: 25, clearBonus: 180 },
+  { cols: 17, rows: 13, carrots: 4, elephants: 3, carrotPoints: 30, clearBonus: 250 },
+  { cols: 19, rows: 13, carrots: 4, elephants: 4, carrotPoints: 35, clearBonus: 330 },
+  { cols: 21, rows: 15, carrots: 5, elephants: 4, carrotPoints: 40, clearBonus: 420 },
+  { cols: 23, rows: 15, carrots: 5, elephants: 5, carrotPoints: 45, clearBonus: 520 },
+  { cols: 25, rows: 17, carrots: 6, elephants: 5, carrotPoints: 50, clearBonus: 630 },
+  { cols: 27, rows: 19, carrots: 6, elephants: 6, carrotPoints: 55, clearBonus: 750 },
+  { cols: 29, rows: 21, carrots: 7, elephants: 6, carrotPoints: 60, clearBonus: 880 },
+  { cols: 31, rows: 23, carrots: 8, elephants: 7, carrotPoints: 70, clearBonus: 1020 },
 ];
-const mazeCols = mazeWalls[0].length;
-const mazeRows = mazeWalls.length;
 const mazeViewport = {
   x: 44,
   y: 62,
@@ -85,6 +77,7 @@ const state = {
   cloudsOffset: 0,
   pettingTimer: 0,
   mazeMessageTimer: 0,
+  mazeCelebrationText: "",
   bunny: {
     x: 130,
     y: groundY,
@@ -103,30 +96,186 @@ bestScoreElement.textContent = String(state.bestScore);
 updateHud();
 
 function createMazeState() {
+  return createMazeLevel(0);
+}
+
+function createMazeLevel(levelIndex) {
+  const config = mazeLevels[levelIndex];
+  const walls = generateMazeWalls(config.cols, config.rows, levelIndex + 1);
+  const openCells = collectOpenCells(walls);
+  const start = { x: 1, y: 1 };
+  const reserved = new Set([cellKey(start.x, start.y)]);
+  const distantCells = [...openCells]
+    .filter((cell) => cell.x !== start.x || cell.y !== start.y)
+    .sort((a, b) => {
+      const distA = Math.hypot(a.x - start.x, a.y - start.y);
+      const distB = Math.hypot(b.x - start.x, b.y - start.y);
+      return distB - distA;
+    });
+  const carrots = pickMazeCells(distantCells, config.carrots, reserved, 3.2);
+  const elephants = pickMazeCells(distantCells, config.elephants, reserved, 2.4).map((cell, index) => {
+    const dir = index % 2 === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
+    return createMazeElephant(cell.x, cell.y, dir.x, dir.y, 1.65 + levelIndex * 0.13);
+  });
+
   return {
+    levelIndex,
+    levelNumber: levelIndex + 1,
+    cols: config.cols,
+    rows: config.rows,
+    walls,
     cameraX: 0,
     cameraY: 0,
+    start,
     bunny: {
-      cellX: 1,
-      cellY: 1,
-      px: 1,
-      py: 1,
+      cellX: start.x,
+      cellY: start.y,
+      px: start.x,
+      py: start.y,
       dir: { x: 0, y: 0 },
       nextDir: { x: 0, y: 0 },
       speed: 3.4,
       moving: false,
-      fromX: 1,
-      fromY: 1,
-      targetX: 1,
-      targetY: 1,
+      fromX: start.x,
+      fromY: start.y,
+      targetX: start.x,
+      targetY: start.y,
       progress: 0,
     },
-    carrot: { x: 25, y: 15 },
-    elephants: [
-      createMazeElephant(13, 1, -1, 0, 2.1),
-      createMazeElephant(9, 7, 0, 1, 1.95),
-      createMazeElephant(21, 11, -1, 0, 1.9),
-    ],
+    carrots,
+    elephants,
+    carrotPoints: config.carrotPoints,
+    clearBonus: config.clearBonus,
+    celebrationTimer: 0,
+    transitionTimer: 0,
+    confetti: [],
+    levelComplete: false,
+  };
+}
+
+function generateMazeWalls(cols, rows, seed) {
+  const width = cols % 2 === 0 ? cols + 1 : cols;
+  const height = rows % 2 === 0 ? rows + 1 : rows;
+  const grid = Array.from({ length: height }, () => Array(width).fill("#"));
+  const stack = [{ x: 1, y: 1 }];
+  const random = createSeededRandom(seed * 9973);
+  grid[1][1] = ".";
+
+  while (stack.length) {
+    const current = stack[stack.length - 1];
+    const neighbors = [
+      { x: current.x + 2, y: current.y, betweenX: current.x + 1, betweenY: current.y },
+      { x: current.x - 2, y: current.y, betweenX: current.x - 1, betweenY: current.y },
+      { x: current.x, y: current.y + 2, betweenX: current.x, betweenY: current.y + 1 },
+      { x: current.x, y: current.y - 2, betweenX: current.x, betweenY: current.y - 1 },
+    ].filter((neighbor) =>
+      neighbor.x > 0 &&
+      neighbor.x < width - 1 &&
+      neighbor.y > 0 &&
+      neighbor.y < height - 1 &&
+      grid[neighbor.y][neighbor.x] === "#"
+    );
+
+    if (!neighbors.length) {
+      stack.pop();
+      continue;
+    }
+
+    const next = neighbors[Math.floor(random() * neighbors.length)];
+    grid[next.betweenY][next.betweenX] = ".";
+    grid[next.y][next.x] = ".";
+    stack.push({ x: next.x, y: next.y });
+  }
+
+  const loopCandidates = [];
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      if (grid[y][x] !== "#") {
+        continue;
+      }
+      const horizontalConnector =
+        grid[y][x - 1] === "." &&
+        grid[y][x + 1] === "." &&
+        grid[y - 1][x] === "#" &&
+        grid[y + 1][x] === "#";
+      const verticalConnector =
+        grid[y - 1][x] === "." &&
+        grid[y + 1][x] === "." &&
+        grid[y][x - 1] === "#" &&
+        grid[y][x + 1] === "#";
+
+      if (horizontalConnector || verticalConnector) {
+        loopCandidates.push({ x, y });
+      }
+    }
+  }
+
+  const extraPassages = Math.min(
+    loopCandidates.length,
+    Math.max(4, Math.floor((width * height) / 95) + Math.floor(seed * 0.8))
+  );
+  for (let index = 0; index < extraPassages; index += 1) {
+    const pickIndex = Math.floor(random() * loopCandidates.length);
+    const [candidate] = loopCandidates.splice(pickIndex, 1);
+    if (!candidate) {
+      break;
+    }
+    grid[candidate.y][candidate.x] = ".";
+  }
+
+  return grid.map((row) => row.join(""));
+}
+
+function collectOpenCells(walls) {
+  const openCells = [];
+  for (let y = 0; y < walls.length; y += 1) {
+    for (let x = 0; x < walls[y].length; x += 1) {
+      if (walls[y][x] === ".") {
+        openCells.push({ x, y });
+      }
+    }
+  }
+  return openCells;
+}
+
+function pickMazeCells(cells, count, reserved, minDistance) {
+  const selected = [];
+  let spacing = minDistance;
+
+  while (selected.length < count && spacing >= 0) {
+    for (const cell of cells) {
+      const key = cellKey(cell.x, cell.y);
+      if (reserved.has(key)) {
+        continue;
+      }
+      const farEnough = selected.every((picked) => Math.hypot(cell.x - picked.x, cell.y - picked.y) >= spacing);
+      if (!farEnough) {
+        continue;
+      }
+      selected.push(cell);
+      reserved.add(key);
+      if (selected.length === count) {
+        break;
+      }
+    }
+    spacing -= 0.8;
+  }
+
+  return selected;
+}
+
+function cellKey(x, y) {
+  return `${x},${y}`;
+}
+
+function createSeededRandom(seed) {
+  let value = seed >>> 0;
+  return function seededRandom() {
+    value += 0x6D2B79F5;
+    let t = value;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -199,15 +348,22 @@ function startRunnerGame() {
 
 function startMazeGame() {
   requestGameFullscreen();
+  loadMazeLevel(0, true);
+}
+
+function loadMazeLevel(levelIndex, resetScore) {
   state.mode = "maze";
   state.selectedGame = "maze";
   state.running = true;
   state.gameOver = false;
-  state.score = 0;
-  scoreElement.textContent = "0";
+  if (resetScore) {
+    state.score = 0;
+  }
+  scoreElement.textContent = String(state.score);
   state.lastTime = 0;
-  state.mazeMessageTimer = 1600;
-  state.maze = createMazeState();
+  state.mazeMessageTimer = 1800;
+  state.mazeCelebrationText = "";
+  state.maze = createMazeLevel(levelIndex);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
   updateMazeCamera();
@@ -217,14 +373,37 @@ function startMazeGame() {
 }
 
 function completeMazeLevel() {
-  state.score += 150;
+  const maze = state.maze;
+  if (maze.levelComplete) {
+    return;
+  }
+
+  maze.levelComplete = true;
+  maze.celebrationTimer = 2400;
+  maze.transitionTimer = 2400;
+  maze.confetti = createConfettiBursts(140);
+  state.score += maze.clearBonus;
   scoreElement.textContent = String(state.score);
-  finalScoreElement.textContent = `Bosse hittade moroten i labyrinten och fick totalt ${state.score} poäng.`;
-  gameOverOverlay.classList.remove("hidden");
-  gameOverOverlay.querySelector("h2").textContent = "Bana klar!";
-  restartButton.textContent = "Spela igen";
+  state.mazeCelebrationText = `Hurra! Bana ${maze.levelNumber} klar! +${maze.clearBonus} poäng`;
+  state.mazeMessageTimer = 2200;
+  persistBestScore();
+}
+
+function advanceMazeLevel() {
+  if (state.maze.levelIndex + 1 >= totalMazeLevels) {
+    finishMazeAdventure();
+    return;
+  }
+  loadMazeLevel(state.maze.levelIndex + 1, false);
+}
+
+function finishMazeAdventure() {
   state.running = false;
   state.gameOver = true;
+  finalScoreElement.textContent = `Bosse klarade alla 10 banor och samlade ihop ${state.score} poäng i labyrinten.`;
+  gameOverOverlay.querySelector("h2").textContent = "Alla banor klara!";
+  restartButton.textContent = "Spela från bana 1";
+  gameOverOverlay.classList.remove("hidden");
   persistBestScore();
   updateShellLayout();
 }
@@ -254,7 +433,8 @@ function updateHud() {
     return;
   }
   if (state.mode === "maze") {
-    levelLabelElement.textContent = "Vimsar";
+    const levelNumber = state.maze?.levelNumber || 1;
+    levelLabelElement.textContent = `Vimsar ${levelNumber}/${totalMazeLevels}`;
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
@@ -477,6 +657,16 @@ function updateMaze(delta) {
     state.mazeMessageTimer = Math.max(0, state.mazeMessageTimer - delta);
   }
 
+  if (maze.levelComplete) {
+    updateConfetti(maze.confetti, delta);
+    maze.celebrationTimer = Math.max(0, maze.celebrationTimer - delta);
+    maze.transitionTimer = Math.max(0, maze.transitionTimer - delta);
+    if (maze.transitionTimer === 0) {
+      advanceMazeLevel();
+    }
+    return;
+  }
+
   updateMazeBunny(bunny, delta);
 
   for (const elephant of maze.elephants) {
@@ -490,14 +680,26 @@ function updateMaze(delta) {
 
   updateMazeCamera();
 
-  if (Math.hypot(bunny.px - maze.carrot.x, bunny.py - maze.carrot.y) < 0.28) {
+  for (const carrot of maze.carrots) {
+    if (carrot.collected) {
+      continue;
+    }
+    if (Math.hypot(bunny.px - carrot.x, bunny.py - carrot.y) < 0.28) {
+      carrot.collected = true;
+      state.score += maze.carrotPoints;
+      scoreElement.textContent = String(state.score);
+      persistBestScore();
+    }
+  }
+
+  if (maze.carrots.every((carrot) => carrot.collected)) {
     completeMazeLevel();
   }
 }
 
 function updateMazeCamera() {
-  const worldWidth = mazeCols * mazeCell;
-  const worldHeight = mazeRows * mazeCell;
+  const worldWidth = state.maze.cols * mazeCell;
+  const worldHeight = state.maze.rows * mazeCell;
   const targetX = state.maze.bunny.px * mazeCell + mazeCell / 2 - mazeViewport.width / 2;
   const targetY = state.maze.bunny.py * mazeCell + mazeCell / 2 - mazeViewport.height / 2;
   state.maze.cameraX = clamp(targetX, 0, Math.max(0, worldWidth - mazeViewport.width));
@@ -739,10 +941,11 @@ function canOccupy(px, py, margin = 0.28) {
 }
 
 function isOpenCell(x, y) {
-  if (x < 0 || x >= mazeCols || y < 0 || y >= mazeRows) {
+  const maze = state.maze;
+  if (x < 0 || x >= maze.cols || y < 0 || y >= maze.rows) {
     return false;
   }
-  return mazeWalls[y][x] !== "#";
+  return maze.walls[y][x] !== "#";
 }
 
 function mazeToCanvasX(value) {
@@ -820,25 +1023,34 @@ function drawMaze() {
   ctx.translate(mazeViewport.x - state.maze.cameraX, mazeViewport.y - state.maze.cameraY);
 
   ctx.fillStyle = mazeFloorColor;
-  ctx.fillRect(0, 0, mazeCols * mazeCell, mazeRows * mazeCell);
+  ctx.fillRect(0, 0, state.maze.cols * mazeCell, state.maze.rows * mazeCell);
   drawMazeWalls();
 
-  highlightMazeCell(1, 1, "rgba(126, 215, 255, 0.18)");
-  highlightMazeCell(state.maze.carrot.x, state.maze.carrot.y, "rgba(246, 139, 44, 0.22)");
-  drawCarrotAtCell(state.maze.carrot.x, state.maze.carrot.y);
+  highlightMazeCell(state.maze.start.x, state.maze.start.y, "rgba(126, 215, 255, 0.18)");
+  for (const carrot of state.maze.carrots) {
+    if (carrot.collected) {
+      continue;
+    }
+    highlightMazeCell(carrot.x, carrot.y, "rgba(246, 139, 44, 0.22)");
+    drawCarrotAtCell(carrot.x, carrot.y);
+  }
   for (const elephant of state.maze.elephants) {
     drawElephant(elephant.px * mazeCell + mazeCell / 2 - 20, elephant.py * mazeCell + mazeCell / 2 + 14, 40, 30, true);
   }
   drawMazeBunny();
+  drawConfetti(state.maze.confetti);
   ctx.restore();
 
   drawMazeLegend();
 
   ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.font = "700 22px 'Baloo 2'";
-  const text = state.mazeMessageTimer > 0
-    ? "Labyrintbana: nå moroten innan elefanterna fångar Bosse."
-    : "Piltangenter eller WASD för att svänga i labyrinten.";
+  const remainingCarrots = state.maze.carrots.filter((carrot) => !carrot.collected).length;
+  const text = state.maze.levelComplete
+    ? state.mazeCelebrationText
+    : state.mazeMessageTimer > 0
+      ? `Bana ${state.maze.levelNumber}: ta ${remainingCarrots} morötter och undvik elefanterna.`
+      : "Piltangenter eller WASD för att svänga i labyrinten.";
   ctx.fillText(text, 28, 38);
 }
 
@@ -905,8 +1117,8 @@ function drawMazeWalls() {
   ctx.strokeStyle = mazeWallColor;
   ctx.lineWidth = mazeLineWidth;
   ctx.lineCap = "round";
-  for (let row = 0; row < mazeRows; row += 1) {
-    for (let col = 0; col < mazeCols; col += 1) {
+  for (let row = 0; row < state.maze.rows; row += 1) {
+    for (let col = 0; col < state.maze.cols; col += 1) {
       if (!isOpenCell(col, row)) {
         continue;
       }
@@ -939,7 +1151,7 @@ function drawMazeLegend() {
   const baseX = 26;
   const baseY = canvas.height - 68;
   ctx.fillStyle = "rgba(9, 20, 34, 0.72)";
-  ctx.fillRect(baseX, baseY, 330, 34);
+  ctx.fillRect(baseX, baseY, 520, 34);
 
   ctx.fillStyle = "#c9cdd3";
   ctx.beginPath();
@@ -962,6 +1174,52 @@ function drawMazeLegend() {
   ctx.fill();
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.fillText("Morot", baseX + 242, baseY + 23);
+
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText(`Kvar ${state.maze.carrots.filter((carrot) => !carrot.collected).length}`, baseX + 324, baseY + 23);
+  ctx.fillText(`Målbonus +${state.maze.clearBonus}`, baseX + 404, baseY + 23);
+}
+
+function createConfettiBursts(count) {
+  const colors = ["#ffd84d", "#ff8c42", "#7ed7ff", "#ff6f91", "#7ddf6f", "#fff6c4"];
+  return Array.from({ length: count }, () => ({
+    x: mazeViewport.width / 2 + (Math.random() - 0.5) * 180,
+    y: mazeViewport.height / 2 + (Math.random() - 0.5) * 80,
+    vx: (Math.random() - 0.5) * 10,
+    vy: -2 - Math.random() * 6,
+    size: 4 + Math.random() * 6,
+    rotation: Math.random() * Math.PI,
+    spin: (Math.random() - 0.5) * 0.24,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    life: 1100 + Math.random() * 1200,
+  }));
+}
+
+function updateConfetti(confetti, delta) {
+  for (const piece of confetti) {
+    if (piece.life <= 0) {
+      continue;
+    }
+    piece.life = Math.max(0, piece.life - delta);
+    piece.x += piece.vx;
+    piece.y += piece.vy;
+    piece.vy += 0.18;
+    piece.rotation += piece.spin;
+  }
+}
+
+function drawConfetti(confetti) {
+  for (const piece of confetti) {
+    if (piece.life <= 0) {
+      continue;
+    }
+    ctx.save();
+    ctx.translate(piece.x + state.maze.cameraX, piece.y + state.maze.cameraY);
+    ctx.rotate(piece.rotation);
+    ctx.fillStyle = piece.color;
+    ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size * 0.65);
+    ctx.restore();
+  }
 }
 
 function drawBunnyShape(x, y, jumpStretch) {
