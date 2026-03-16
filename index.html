@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260316-03">
+  <link rel="stylesheet" href="style.css?v=20260316-04">
 </head>
 <body>
   <main class="app">
@@ -21,7 +21,7 @@
           <span>Spel</span>
           <strong id="level-label">Välj</strong>
         </div>
-        <div class="score-card">
+        <div class="score-card" id="score-card">
           <span>Poäng</span>
           <strong id="score">0</strong>
         </div>
@@ -57,6 +57,21 @@
           </div>
         </div>
       </div>
+
+      <div class="overlay hidden" id="cheat-overlay">
+        <div class="panel cheat-panel">
+          <h2>Cheat-code</h2>
+          <p>Skriv in koden för Bosse Hoppar.</p>
+          <form id="cheat-form">
+            <input id="cheat-input" type="text" autocomplete="off" spellcheck="false" placeholder="Skriv kod">
+            <div class="button-row">
+              <button id="cheat-submit" type="submit">Aktivera</button>
+              <button id="cheat-cancel" type="button">Stäng</button>
+            </div>
+          </form>
+          <p class="cheat-feedback" id="cheat-feedback"></p>
+        </div>
+      </div>
     </section>
 
     <section class="mobile-ui" aria-label="Mobila spelkontroller">
@@ -69,6 +84,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260316-03"></script>
+  <script src="script.js?v=20260316-04"></script>
 </body>
 </html>

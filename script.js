@@ -1,10 +1,16 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const scoreElement = document.getElementById("score");
+const scoreCard = document.getElementById("score-card");
 const bestScoreElement = document.getElementById("best-score");
 const levelLabelElement = document.getElementById("level-label");
 const startOverlay = document.getElementById("start-overlay");
 const gameOverOverlay = document.getElementById("game-over-overlay");
+const cheatOverlay = document.getElementById("cheat-overlay");
+const cheatForm = document.getElementById("cheat-form");
+const cheatInput = document.getElementById("cheat-input");
+const cheatCancel = document.getElementById("cheat-cancel");
+const cheatFeedback = document.getElementById("cheat-feedback");
 const finalScoreElement = document.getElementById("final-score");
 const gameShell = document.getElementById("game-shell");
 const runnerButton = document.getElementById("runner-button");
@@ -16,7 +22,7 @@ const joystickBase = document.getElementById("joystick-base");
 const joystickKnob = document.getElementById("joystick-knob");
 
 const groundY = 330;
-const gravity = 0.82;
+const gravity = 0.72;
 const jumpVelocity = -16.5;
 const baseSpeed = 6.2;
 const elephantInterval = 1350;
@@ -60,6 +66,8 @@ const joystickState = {
   active: false,
   pointerId: null,
 };
+let lastScoreTapAt = 0;
+let cheatResumeRunning = false;
 
 const state = {
   running: false,
@@ -78,6 +86,7 @@ const state = {
   pettingTimer: 0,
   mazeMessageTimer: 0,
   mazeCelebrationText: "",
+  cheatOpen: false,
   bunny: {
     x: 130,
     y: groundY,
@@ -333,6 +342,7 @@ function showMenu() {
   updateHud();
   updateMobileMode();
   updateShellLayout();
+  closeCheatDialog();
   startOverlay.classList.remove("hidden");
   gameOverOverlay.classList.add("hidden");
 }
@@ -342,6 +352,7 @@ function startRunnerGame() {
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeCheatDialog();
   updateMobileMode();
   updateShellLayout();
 }
@@ -366,6 +377,7 @@ function loadMazeLevel(levelIndex, resetScore) {
   state.maze = createMazeLevel(levelIndex);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeCheatDialog();
   updateMazeCamera();
   updateHud();
   updateMobileMode();
@@ -484,6 +496,54 @@ function updateShellLayout() {
   gameShell.classList.toggle("menu-open", menuVisible);
 }
 
+function openCheatDialog() {
+  const runnerActive = state.mode === "runner" || state.selectedGame === "runner";
+  if (!runnerActive) {
+    return;
+  }
+  cheatResumeRunning = state.mode === "runner" && state.running && !state.gameOver;
+  state.running = false;
+  state.cheatOpen = true;
+  cheatOverlay.classList.remove("hidden");
+  cheatFeedback.textContent = "";
+  cheatInput.value = "";
+  queueMicrotask(() => cheatInput.focus());
+}
+
+function closeCheatDialog() {
+  state.cheatOpen = false;
+  cheatOverlay.classList.add("hidden");
+  cheatFeedback.textContent = "";
+  if (cheatResumeRunning && state.mode === "runner" && !state.gameOver) {
+    state.running = true;
+  }
+  cheatResumeRunning = false;
+}
+
+function spawnSigge(xOffset = 0) {
+  state.sigges.push({
+    x: canvas.width + 120 + xOffset,
+    y: groundY + 10,
+    width: 74,
+    height: 48,
+    petted: false,
+    jumpOffset: 0,
+    nextHopIn: 180 + Math.random() * 500,
+    hopTimer: 0,
+  });
+}
+
+function activateCharlieCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  for (let index = 0; index < 12; index += 1) {
+    spawnSigge(index * 58);
+  }
+  cheatFeedback.textContent = "Charlie aktiverad. Massor av Sigge kommer!";
+}
+
 function jump() {
   if (!state.running || state.gameOver || state.mode !== "runner") {
     return;
@@ -537,8 +597,8 @@ function updateRunner(delta) {
     state.pettingTimer = Math.max(0, state.pettingTimer - delta);
   }
 
-  bunny.velocityY += gravity;
-  bunny.y += bunny.velocityY;
+  bunny.velocityY += gravity * frameScale;
+  bunny.y += bunny.velocityY * frameScale;
   if (bunny.y > groundY) {
     bunny.y = groundY;
     bunny.velocityY = 0;
@@ -1473,6 +1533,19 @@ function frame(timestamp) {
 }
 
 document.addEventListener("keydown", (event) => {
+  if (state.cheatOpen) {
+    if (event.code === "Escape") {
+      closeCheatDialog();
+    }
+    return;
+  }
+
+  if (event.code === "KeyC") {
+    event.preventDefault();
+    openCheatDialog();
+    return;
+  }
+
   if (handleMazeDirection(event.code)) {
     event.preventDefault();
     return;
@@ -1495,6 +1568,19 @@ canvas.addEventListener("pointerdown", () => {
   if (state.mode === "runner") {
     handleRunnerJump();
   }
+});
+
+scoreCard.addEventListener("pointerup", () => {
+  if (!isTouchMobileMode()) {
+    return;
+  }
+  const now = performance.now();
+  if (now - lastScoreTapAt < 360) {
+    openCheatDialog();
+    lastScoreTapAt = 0;
+    return;
+  }
+  lastScoreTapAt = now;
 });
 
 runnerButton.addEventListener("click", () => {
@@ -1520,6 +1606,27 @@ restartButton.addEventListener("click", () => {
 
 menuButton.addEventListener("click", () => {
   showMenu();
+});
+
+cheatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (cheatInput.value.trim().toLowerCase() === "charlie") {
+    activateCharlieCheat();
+  } else {
+    cheatFeedback.textContent = "Fel kod.";
+    return;
+  }
+  closeCheatDialog();
+});
+
+cheatCancel.addEventListener("click", () => {
+  closeCheatDialog();
+});
+
+cheatOverlay.addEventListener("pointerdown", (event) => {
+  if (event.target === cheatOverlay) {
+    closeCheatDialog();
+  }
 });
 
 joystickBase.addEventListener("pointerdown", (event) => {
