@@ -172,6 +172,71 @@ canvas {
   color: #35616f;
 }
 
+.leaderboard-panel {
+  width: min(520px, 100%);
+}
+
+.leaderboard-list {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.leaderboard-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(33, 64, 75, 0.06);
+}
+
+.leaderboard-item + .leaderboard-item {
+  margin-top: 8px;
+}
+
+.leaderboard-rank {
+  font-weight: 800;
+  color: #35616f;
+}
+
+.leaderboard-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-score {
+  font-weight: 800;
+}
+
+.leaderboard-empty {
+  margin-top: 14px;
+  padding: 18px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+#name-entry-input {
+  width: 100%;
+  border: 2px solid rgba(33, 64, 75, 0.16);
+  border-radius: 16px;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+#name-entry-input:focus {
+  outline: none;
+  border-color: rgba(246, 139, 44, 0.65);
+  box-shadow: 0 0 0 4px rgba(246, 139, 44, 0.15);
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;

@@ -5,6 +5,18 @@ const scoreCard = document.getElementById("score-card");
 const bestScoreElement = document.getElementById("best-score");
 const levelLabelElement = document.getElementById("level-label");
 const startOverlay = document.getElementById("start-overlay");
+const leaderboardOverlay = document.getElementById("leaderboard-overlay");
+const leaderboardTitle = document.getElementById("leaderboard-title");
+const leaderboardStatus = document.getElementById("leaderboard-status");
+const leaderboardList = document.getElementById("leaderboard-list");
+const leaderboardStart = document.getElementById("leaderboard-start");
+const leaderboardBack = document.getElementById("leaderboard-back");
+const nameEntryOverlay = document.getElementById("name-entry-overlay");
+const nameEntryText = document.getElementById("name-entry-text");
+const nameEntryForm = document.getElementById("name-entry-form");
+const nameEntryInput = document.getElementById("name-entry-input");
+const nameEntrySkip = document.getElementById("name-entry-skip");
+const nameEntryFeedback = document.getElementById("name-entry-feedback");
 const gameOverOverlay = document.getElementById("game-over-overlay");
 const cheatOverlay = document.getElementById("cheat-overlay");
 const cheatForm = document.getElementById("cheat-form");
@@ -29,6 +41,15 @@ const elephantInterval = 1350;
 const carrotInterval = 2900;
 const siggeInterval = 4200;
 const bestScoreKey = "bosse-hoppar-best-score";
+const leaderboardLimit = 10;
+const leaderboardStorageKeys = {
+  runner: "bosse-hoppar-runner-scores",
+  maze: "bosse-hoppar-maze-scores",
+};
+const gameMeta = {
+  runner: { key: "runner", label: "Bosse Hoppar" },
+  maze: { key: "maze", label: "Bosse Vimsar" },
+};
 const mazeCell = 40;
 const totalMazeLevels = 10;
 const mazeLevels = [
@@ -68,12 +89,13 @@ const joystickState = {
 };
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
+let supabaseClient = null;
 
 const state = {
   running: false,
   gameOver: false,
   score: 0,
-  bestScore: Number(localStorage.getItem(bestScoreKey) || 0),
+  bestScore: 0,
   mode: "menu",
   selectedGame: null,
   distance: 0,
@@ -87,6 +109,9 @@ const state = {
   mazeMessageTimer: 0,
   mazeCelebrationText: "",
   cheatOpen: false,
+  leaderboardEntries: [],
+  leaderboardGame: null,
+  pendingScoreEntry: null,
   bunny: {
     x: 130,
     y: groundY,
@@ -101,7 +126,7 @@ const state = {
   maze: createMazeState(),
 };
 
-bestScoreElement.textContent = String(state.bestScore);
+bestScoreElement.textContent = "0";
 updateHud();
 
 function createMazeState() {
@@ -338,11 +363,17 @@ function showMenu() {
   state.running = false;
   state.gameOver = false;
   state.score = 0;
+  state.bestScore = 0;
+  state.leaderboardEntries = [];
+  state.leaderboardGame = null;
   scoreElement.textContent = "0";
+  bestScoreElement.textContent = "0";
   updateHud();
   updateMobileMode();
   updateShellLayout();
   closeCheatDialog();
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
   startOverlay.classList.remove("hidden");
   gameOverOverlay.classList.add("hidden");
 }
@@ -352,6 +383,8 @@ function startRunnerGame() {
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
   closeCheatDialog();
   updateMobileMode();
   updateShellLayout();
@@ -377,6 +410,8 @@ function loadMazeLevel(levelIndex, resetScore) {
   state.maze = createMazeLevel(levelIndex);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
   closeCheatDialog();
   updateMazeCamera();
   updateHud();
@@ -412,38 +447,48 @@ function advanceMazeLevel() {
 function finishMazeAdventure() {
   state.running = false;
   state.gameOver = true;
-  finalScoreElement.textContent = `Bosse klarade alla 10 banor och samlade ihop ${state.score} poäng i labyrinten.`;
-  gameOverOverlay.querySelector("h2").textContent = "Alla banor klara!";
-  restartButton.textContent = "Spela från bana 1";
-  restartButton.dataset.action = "maze-reset";
-  gameOverOverlay.classList.remove("hidden");
   persistBestScore();
   updateShellLayout();
+  void handleFinishedGame({
+    game: "maze",
+    score: state.score,
+    title: "Alla banor klara!",
+    message: `Bosse klarade alla 10 banor och samlade ihop ${state.score} poäng i labyrinten.`,
+    restartLabel: "Spela från bana 1",
+    restartAction: "maze-reset",
+  });
 }
 
 function endGame(message) {
   state.running = false;
   state.gameOver = true;
-  finalScoreElement.textContent = message || `Du fick ${state.score} poäng.`;
-  gameOverOverlay.querySelector("h2").textContent = "Oj! Bosse snubblade.";
-  restartButton.textContent = "Spela igen";
-  restartButton.dataset.action = "retry-current";
-  gameOverOverlay.classList.remove("hidden");
   persistBestScore();
   updateShellLayout();
+  const game = state.selectedGame === "maze" ? "maze" : "runner";
+  void handleFinishedGame({
+    game,
+    score: state.score,
+    title: "Oj! Bosse snubblade.",
+    message: message || `Du fick ${state.score} poäng.`,
+    restartLabel: "Spela igen",
+    restartAction: "retry-current",
+  });
 }
 
 function persistBestScore() {
   if (state.score > state.bestScore) {
     state.bestScore = state.score;
-    localStorage.setItem(bestScoreKey, String(state.bestScore));
     bestScoreElement.textContent = String(state.bestScore);
   }
 }
 
 function updateHud() {
   if (state.mode === "menu") {
-    levelLabelElement.textContent = "Välj";
+    if (state.selectedGame && gameMeta[state.selectedGame]) {
+      levelLabelElement.textContent = gameMeta[state.selectedGame].label.replace("Bosse ", "");
+    } else {
+      levelLabelElement.textContent = "Välj";
+    }
     return;
   }
   if (state.mode === "maze") {
@@ -452,6 +497,258 @@ function updateHud() {
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
+}
+
+function getConfiguredGame(game) {
+  return gameMeta[game] || gameMeta.runner;
+}
+
+function getSupabaseConfig() {
+  return window.BOSSE_SUPABASE_CONFIG || { url: "", anonKey: "" };
+}
+
+function hasSupabaseConfig() {
+  const config = getSupabaseConfig();
+  return Boolean(config.url && config.anonKey && window.supabase?.createClient);
+}
+
+function getSupabaseClient() {
+  if (supabaseClient || !hasSupabaseConfig()) {
+    return supabaseClient;
+  }
+  const config = getSupabaseConfig();
+  supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+  return supabaseClient;
+}
+
+function normalizeLeaderboardEntries(entries) {
+  return [...entries]
+    .map((entry) => ({
+      name: String(entry.name || "Anonym").trim().slice(0, 20) || "Anonym",
+      score: Number(entry.score || 0),
+      created_at: entry.created_at || new Date().toISOString(),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => (b.score - a.score) || a.created_at.localeCompare(b.created_at))
+    .slice(0, leaderboardLimit);
+}
+
+function readLocalLeaderboard(game) {
+  const key = leaderboardStorageKeys[game];
+  if (!key) {
+    return [];
+  }
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? normalizeLeaderboardEntries(JSON.parse(raw)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalLeaderboard(game, entries) {
+  const key = leaderboardStorageKeys[game];
+  if (!key) {
+    return;
+  }
+  localStorage.setItem(key, JSON.stringify(normalizeLeaderboardEntries(entries)));
+}
+
+async function fetchLeaderboard(game) {
+  const client = getSupabaseClient();
+  if (client) {
+    const { data, error } = await client
+      .from("highscores")
+      .select("name, score, created_at")
+      .eq("game", game)
+      .order("score", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(leaderboardLimit);
+    if (!error) {
+      return {
+        entries: normalizeLeaderboardEntries(data || []),
+        status: "Topp 10 i världen",
+      };
+    }
+  }
+
+  return {
+    entries: readLocalLeaderboard(game),
+    status: hasSupabaseConfig() ? "Visar lokal reservlista" : "Lokal topplista tills Supabase är konfigurerat",
+  };
+}
+
+async function saveLeaderboardEntry(game, name, score) {
+  const entry = {
+    game,
+    name: String(name || "Anonym").trim().slice(0, 20) || "Anonym",
+    score,
+    created_at: new Date().toISOString(),
+  };
+  const client = getSupabaseClient();
+  if (client) {
+    const { error } = await client.from("highscores").insert({
+      game: entry.game,
+      name: entry.name,
+      score: entry.score,
+    });
+    if (!error) {
+      return { ok: true, remote: true };
+    }
+  }
+
+  const localEntries = readLocalLeaderboard(game);
+  localEntries.push(entry);
+  writeLocalLeaderboard(game, localEntries);
+  return { ok: true, remote: false };
+}
+
+function qualifiesForLeaderboard(entries, score) {
+  if (entries.length < leaderboardLimit) {
+    return true;
+  }
+  const cutoff = entries[entries.length - 1];
+  return score >= cutoff.score;
+}
+
+function updateBestScoreFromEntries(entries) {
+  state.bestScore = entries[0]?.score || 0;
+  bestScoreElement.textContent = String(state.bestScore);
+}
+
+function renderLeaderboard(entries) {
+  leaderboardList.innerHTML = "";
+  if (!entries.length) {
+    const empty = document.createElement("li");
+    empty.className = "leaderboard-empty";
+    empty.textContent = "Ingen topplista ännu. Första rundan blir förstaplatsen.";
+    leaderboardList.append(empty);
+    return;
+  }
+
+  for (let index = 0; index < leaderboardLimit; index += 1) {
+    const entry = entries[index];
+    const item = document.createElement("li");
+    item.className = "leaderboard-item";
+    if (entry) {
+      item.innerHTML = `
+        <span class="leaderboard-rank">#${index + 1}</span>
+        <span class="leaderboard-name">${entry.name}</span>
+        <span class="leaderboard-score">${entry.score}</span>
+      `;
+    } else {
+      item.innerHTML = `
+        <span class="leaderboard-rank">#${index + 1}</span>
+        <span class="leaderboard-name">Ledig plats</span>
+        <span class="leaderboard-score">-</span>
+      `;
+    }
+    leaderboardList.append(item);
+  }
+}
+
+function closeLeaderboardOverlay() {
+  leaderboardOverlay.classList.add("hidden");
+}
+
+function closeNameEntryOverlay() {
+  nameEntryOverlay.classList.add("hidden");
+  nameEntryFeedback.textContent = "";
+  state.pendingScoreEntry = null;
+}
+
+function showGameOverOverlay(title, message, restartLabel = "Spela igen", restartAction = "retry-current") {
+  gameOverOverlay.querySelector("h2").textContent = title;
+  finalScoreElement.textContent = message;
+  restartButton.textContent = restartLabel;
+  restartButton.dataset.action = restartAction;
+  gameOverOverlay.classList.remove("hidden");
+}
+
+async function showLeaderboardForGame(game) {
+  const meta = getConfiguredGame(game);
+  state.selectedGame = game;
+  state.mode = "menu";
+  state.running = false;
+  state.gameOver = false;
+  state.score = 0;
+  scoreElement.textContent = "0";
+  updateHud();
+  updateShellLayout();
+  closeCheatDialog();
+  closeNameEntryOverlay();
+  gameOverOverlay.classList.add("hidden");
+  startOverlay.classList.add("hidden");
+  leaderboardTitle.textContent = `${meta.label} · Topp 10`;
+  leaderboardStatus.textContent = "Läser topplistan...";
+  leaderboardOverlay.classList.remove("hidden");
+  renderLeaderboard([]);
+
+  const { entries, status } = await fetchLeaderboard(game);
+  state.leaderboardEntries = entries;
+  state.leaderboardGame = game;
+  leaderboardStatus.textContent = status;
+  updateBestScoreFromEntries(entries);
+  renderLeaderboard(entries);
+}
+
+function openNameEntryOverlay(game, score, finishConfig) {
+  const meta = getConfiguredGame(game);
+  state.pendingScoreEntry = { game, score, finishConfig };
+  nameEntryText.textContent = `${meta.label}: ${score} poäng räcker till topp 10. Skriv ditt namn.`;
+  nameEntryInput.value = "";
+  nameEntryFeedback.textContent = "";
+  gameOverOverlay.classList.add("hidden");
+  nameEntryOverlay.classList.remove("hidden");
+  queueMicrotask(() => nameEntryInput.focus());
+}
+
+async function completeGameFinish(finishConfig) {
+  const { entries, status } = await fetchLeaderboard(finishConfig.game);
+  state.leaderboardEntries = entries;
+  state.leaderboardGame = finishConfig.game;
+  updateBestScoreFromEntries(entries);
+  leaderboardStatus.textContent = status;
+  renderLeaderboard(entries);
+  closeNameEntryOverlay();
+  showGameOverOverlay(
+    finishConfig.title,
+    finishConfig.message,
+    finishConfig.restartLabel,
+    finishConfig.restartAction
+  );
+}
+
+async function showSavedLeaderboard(game, statusText) {
+  const { entries, status } = await fetchLeaderboard(game);
+  state.leaderboardEntries = entries;
+  state.leaderboardGame = game;
+  updateBestScoreFromEntries(entries);
+  leaderboardTitle.textContent = `${getConfiguredGame(game).label} · Topp 10`;
+  leaderboardStatus.textContent = statusText || status;
+  renderLeaderboard(entries);
+  closeNameEntryOverlay();
+  gameOverOverlay.classList.add("hidden");
+  leaderboardOverlay.classList.remove("hidden");
+}
+
+async function handleFinishedGame(finishConfig) {
+  const { entries, status } = await fetchLeaderboard(finishConfig.game);
+  state.leaderboardEntries = entries;
+  state.leaderboardGame = finishConfig.game;
+  leaderboardStatus.textContent = status;
+  renderLeaderboard(entries);
+  updateBestScoreFromEntries(entries);
+  if (qualifiesForLeaderboard(entries, finishConfig.score)) {
+    openNameEntryOverlay(finishConfig.game, finishConfig.score, finishConfig);
+    return;
+  }
+  showGameOverOverlay(
+    finishConfig.title,
+    finishConfig.message,
+    finishConfig.restartLabel,
+    finishConfig.restartAction
+  );
 }
 
 function isLandscapeMobileMode() {
@@ -497,8 +794,7 @@ function updateShellLayout() {
 }
 
 function openCheatDialog() {
-  const runnerActive = state.mode === "runner" || state.selectedGame === "runner";
-  if (!runnerActive) {
+  if (state.mode !== "runner" || state.gameOver) {
     return;
   }
   cheatResumeRunning = state.mode === "runner" && state.running && !state.gameOver;
@@ -1533,6 +1829,20 @@ function frame(timestamp) {
 }
 
 document.addEventListener("keydown", (event) => {
+  if (!nameEntryOverlay.classList.contains("hidden")) {
+    if (event.code === "Escape") {
+      const finishConfig = state.pendingScoreEntry?.finishConfig;
+      closeNameEntryOverlay();
+      showGameOverOverlay(
+        finishConfig?.title || "Oj! Bosse snubblade.",
+        finishConfig?.message || `Du fick ${state.score} poäng.`,
+        finishConfig?.restartLabel || "Spela igen",
+        finishConfig?.restartAction || "retry-current"
+      );
+    }
+    return;
+  }
+
   if (state.cheatOpen) {
     if (event.code === "Escape") {
       closeCheatDialog();
@@ -1584,11 +1894,23 @@ scoreCard.addEventListener("pointerup", () => {
 });
 
 runnerButton.addEventListener("click", () => {
-  startRunnerGame();
+  void showLeaderboardForGame("runner");
 });
 
 mazeButton.addEventListener("click", () => {
-  startMazeGame();
+  void showLeaderboardForGame("maze");
+});
+
+leaderboardStart.addEventListener("click", () => {
+  if (state.selectedGame === "maze") {
+    startMazeGame();
+  } else {
+    startRunnerGame();
+  }
+});
+
+leaderboardBack.addEventListener("click", () => {
+  showMenu();
 });
 
 restartButton.addEventListener("click", () => {
@@ -1606,6 +1928,29 @@ restartButton.addEventListener("click", () => {
 
 menuButton.addEventListener("click", () => {
   showMenu();
+});
+
+nameEntryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.pendingScoreEntry) {
+    return;
+  }
+  const name = nameEntryInput.value.trim();
+  if (!name) {
+    nameEntryFeedback.textContent = "Skriv ett namn först.";
+    return;
+  }
+  nameEntryFeedback.textContent = "Sparar...";
+  const game = state.pendingScoreEntry.game;
+  await saveLeaderboardEntry(game, name, state.pendingScoreEntry.score);
+  await showSavedLeaderboard(game, "Ditt resultat är sparat i topplistan.");
+});
+
+nameEntrySkip.addEventListener("click", async () => {
+  if (!state.pendingScoreEntry) {
+    return;
+  }
+  await completeGameFinish(state.pendingScoreEntry.finishConfig);
 });
 
 cheatForm.addEventListener("submit", (event) => {

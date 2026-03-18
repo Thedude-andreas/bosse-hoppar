@@ -72,6 +72,33 @@
           <p class="cheat-feedback" id="cheat-feedback"></p>
         </div>
       </div>
+
+      <div class="overlay hidden" id="leaderboard-overlay">
+        <div class="panel leaderboard-panel">
+          <h2 id="leaderboard-title">Topplista</h2>
+          <p id="leaderboard-status">Läser topplistan...</p>
+          <ol class="leaderboard-list" id="leaderboard-list"></ol>
+          <div class="button-row">
+            <button id="leaderboard-start" type="button">Starta</button>
+            <button id="leaderboard-back" type="button">Till spelval</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="name-entry-overlay">
+        <div class="panel leaderboard-panel">
+          <h2>Topplistan väntar</h2>
+          <p id="name-entry-text">Du kom in på topp 10. Skriv ditt namn.</p>
+          <form id="name-entry-form">
+            <input id="name-entry-input" type="text" maxlength="20" autocomplete="nickname" spellcheck="false" placeholder="Ditt namn">
+            <div class="button-row">
+              <button id="name-entry-submit" type="submit">Spara</button>
+              <button id="name-entry-skip" type="button">Hoppa över</button>
+            </div>
+          </form>
+          <p class="cheat-feedback" id="name-entry-feedback"></p>
+        </div>
+      </div>
     </section>
 
     <section class="mobile-ui" aria-label="Mobila spelkontroller">
@@ -84,6 +111,8 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260316-04"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=20260318-01"></script>
+  <script src="script.js?v=20260318-01"></script>
 </body>
 </html>
