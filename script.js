@@ -37,8 +37,8 @@ const groundY = 330;
 const gravity = 0.72;
 const jumpVelocity = -16.5;
 const baseSpeed = 6.2;
-const elephantInterval = 1350;
-const carrotInterval = 2900;
+const elephantInterval = 1280;
+const carrotInterval = 2100;
 const siggeInterval = 4200;
 const bestScoreKey = "bosse-hoppar-best-score";
 const leaderboardLimit = 10;
@@ -903,19 +903,28 @@ function updateRunner(delta) {
 
   state.elephantTimer += delta;
   if (state.elephantTimer > elephantInterval - state.speed * 35) {
-    state.elephants.push({ x: canvas.width + 60, y: groundY + 10, width: 68, height: 52 });
+    const elephantScale = 0.92 + Math.random() * 0.18;
+    state.elephants.push({
+      x: canvas.width + 70 + Math.random() * 130,
+      y: groundY + 8 + Math.random() * 6,
+      width: 68 * elephantScale,
+      height: 52 * elephantScale,
+    });
     state.elephantTimer = 0;
   }
 
   state.carrotTimer += delta;
   if (state.carrotTimer > carrotInterval) {
-    state.carrots.push({
-      x: canvas.width + 60,
-      y: 220 + Math.random() * 55,
-      width: 30,
-      height: 18,
-      collected: false,
-    });
+    const carrotCount = Math.random() < 0.35 ? 2 : 1;
+    for (let index = 0; index < carrotCount; index += 1) {
+      state.carrots.push({
+        x: canvas.width + 60 + index * (34 + Math.random() * 12),
+        y: 190 + Math.random() * 85,
+        width: 30,
+        height: 18,
+        collected: false,
+      });
+    }
     state.carrotTimer = 0;
   }
 
