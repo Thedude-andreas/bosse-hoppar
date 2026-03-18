@@ -109,6 +109,7 @@ const state = {
   mazeMessageTimer: 0,
   mazeCelebrationText: "",
   cheatOpen: false,
+  runnerFlyingElephants: false,
   leaderboardEntries: [],
   leaderboardGame: null,
   pendingScoreEntry: null,
@@ -344,6 +345,7 @@ function resetRunnerState(resetScore) {
   state.cloudsOffset = 0;
   state.pettingTimer = 0;
   state.mazeMessageTimer = 0;
+  state.runnerFlyingElephants = false;
   state.elephants = [];
   state.carrots = [];
   state.sigges = [];
@@ -840,6 +842,22 @@ function activateCharlieCheat() {
   cheatFeedback.textContent = "Charlie aktiverad. Massor av Sigge kommer!";
 }
 
+function activatePelleCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  state.runnerFlyingElephants = true;
+  for (const elephant of state.elephants) {
+    elephant.flying = true;
+    elephant.baseY = elephant.baseY ?? 160 + Math.random() * 120;
+    elephant.bobOffset = elephant.bobOffset ?? Math.random() * Math.PI * 2;
+    elephant.bobSpeed = elephant.bobSpeed ?? (0.0035 + Math.random() * 0.002);
+    elephant.bobAmplitude = elephant.bobAmplitude ?? (10 + Math.random() * 12);
+  }
+  cheatFeedback.textContent = "Pelle aktiverad. Elefanterna flyger nu!";
+}
+
 function jump() {
   if (!state.running || state.gameOver || state.mode !== "runner") {
     return;
@@ -904,11 +922,18 @@ function updateRunner(delta) {
   state.elephantTimer += delta;
   if (state.elephantTimer > elephantInterval - state.speed * 35) {
     const elephantScale = 0.92 + Math.random() * 0.18;
+    const flying = state.runnerFlyingElephants;
     state.elephants.push({
       x: canvas.width + 70 + Math.random() * 130,
-      y: groundY + 8 + Math.random() * 6,
+      y: flying ? 160 + Math.random() * 120 : groundY + 8 + Math.random() * 6,
+      baseY: flying ? 160 + Math.random() * 120 : groundY + 8 + Math.random() * 6,
+      renderY: flying ? 160 + Math.random() * 120 : groundY + 8 + Math.random() * 6,
       width: 68 * elephantScale,
       height: 52 * elephantScale,
+      flying,
+      bobOffset: Math.random() * Math.PI * 2,
+      bobSpeed: 0.0035 + Math.random() * 0.002,
+      bobAmplitude: 10 + Math.random() * 12,
     });
     state.elephantTimer = 0;
   }
@@ -945,6 +970,11 @@ function updateRunner(delta) {
 
   for (const elephant of state.elephants) {
     elephant.x -= state.speed * frameScale;
+    if (elephant.flying) {
+      elephant.renderY = elephant.baseY + Math.sin(performance.now() * elephant.bobSpeed + elephant.bobOffset) * elephant.bobAmplitude;
+    } else {
+      elephant.renderY = elephant.y;
+    }
   }
   for (const carrot of state.carrots) {
     carrot.x -= (state.speed + 0.8) * frameScale;
@@ -979,7 +1009,7 @@ function updateRunner(delta) {
   for (const elephant of state.elephants) {
     if (intersects(bunnyHitbox, {
       x: elephant.x + 8,
-      y: elephant.y - elephant.height + 10,
+      y: (elephant.renderY ?? elephant.y) - elephant.height + 10,
       width: elephant.width - 18,
       height: elephant.height - 14,
     })) {
@@ -1345,7 +1375,7 @@ function drawRunner() {
     drawSigge(sigge);
   }
   for (const elephant of state.elephants) {
-    drawElephant(elephant.x, elephant.y, elephant.width, elephant.height, false);
+    drawElephant(elephant.x, elephant.renderY ?? elephant.y, elephant.width, elephant.height, false, elephant.flying);
   }
   drawBunnyRunner();
 
@@ -1458,7 +1488,11 @@ function drawBunnyRunner() {
 function drawMazeBunny() {
   const bunny = state.maze.bunny;
   highlightMazeCell(Math.round(bunny.px), Math.round(bunny.py), "rgba(255,255,255,0.14)");
-  drawBunnyShape(bunny.px * mazeCell + mazeCell / 2 - 24, bunny.py * mazeCell + mazeCell / 2 - 36, 0.05);
+  ctx.save();
+  ctx.translate(bunny.px * mazeCell + mazeCell / 2 - 12, bunny.py * mazeCell + mazeCell / 2 - 18);
+  ctx.scale(0.56, 0.56);
+  drawBunnyShape(0, 0, 0.05);
+  ctx.restore();
 }
 
 function highlightMazeCell(cellX, cellY, color) {
@@ -1663,7 +1697,7 @@ function drawBunnyShape(x, y, jumpStretch) {
   ctx.restore();
 }
 
-function drawElephant(x, y, width, height, mazeMode) {
+function drawElephant(x, y, width, height, mazeMode, flying = false) {
   const top = y - height;
   const scaleX = width / 68;
   const scaleY = height / 52;
@@ -1702,6 +1736,14 @@ function drawElephant(x, y, width, height, mazeMode) {
   ctx.beginPath();
   ctx.ellipse(31, 39, 18, 12, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  if (flying && !mazeMode) {
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.beginPath();
+    ctx.ellipse(18, 10, 9, 4.5, -0.35, 0, Math.PI * 2);
+    ctx.ellipse(48, 9, 9, 4.5, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.fillStyle = "#232b34";
   ctx.beginPath();
@@ -1964,8 +2006,11 @@ nameEntrySkip.addEventListener("click", async () => {
 
 cheatForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (cheatInput.value.trim().toLowerCase() === "charlie") {
+  const code = cheatInput.value.trim().toLowerCase();
+  if (code === "charlie") {
     activateCharlieCheat();
+  } else if (code === "pelle") {
+    activatePelleCheat();
   } else {
     cheatFeedback.textContent = "Fel kod.";
     return;
