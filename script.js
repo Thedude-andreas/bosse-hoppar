@@ -36,6 +36,8 @@ const joystickKnob = document.getElementById("joystick-knob");
 const groundY = 330;
 const gravity = 0.72;
 const jumpVelocity = -16.5;
+const flappyGravity = 0.52;
+const flappyVelocity = -9.2;
 const baseSpeed = 6.2;
 const elephantInterval = 1280;
 const carrotInterval = 2100;
@@ -109,6 +111,7 @@ const state = {
   mazeMessageTimer: 0,
   mazeCelebrationText: "",
   cheatOpen: false,
+  runnerFlappyMode: false,
   runnerFlyingElephants: false,
   leaderboardEntries: [],
   leaderboardGame: null,
@@ -345,6 +348,7 @@ function resetRunnerState(resetScore) {
   state.cloudsOffset = 0;
   state.pettingTimer = 0;
   state.mazeMessageTimer = 0;
+  state.runnerFlappyMode = false;
   state.runnerFlyingElephants = false;
   state.elephants = [];
   state.carrots = [];
@@ -858,8 +862,23 @@ function activatePelleCheat() {
   cheatFeedback.textContent = "Pelle aktiverad. Elefanterna flyger nu!";
 }
 
+function activateFlappyCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  state.runnerFlappyMode = true;
+  state.bunny.velocityY = flappyVelocity;
+  cheatFeedback.textContent = "Flappy aktiverad. Bosse kan nu flyga!";
+}
+
 function jump() {
   if (!state.running || state.gameOver || state.mode !== "runner") {
+    return;
+  }
+
+  if (state.runnerFlappyMode) {
+    state.bunny.velocityY = flappyVelocity;
     return;
   }
 
@@ -911,11 +930,16 @@ function updateRunner(delta) {
     state.pettingTimer = Math.max(0, state.pettingTimer - delta);
   }
 
-  bunny.velocityY += gravity * frameScale;
+  const activeGravity = state.runnerFlappyMode ? flappyGravity : gravity;
+  bunny.velocityY += activeGravity * frameScale;
   bunny.y += bunny.velocityY * frameScale;
   if (bunny.y > groundY) {
     bunny.y = groundY;
     bunny.velocityY = 0;
+  }
+  if (state.runnerFlappyMode && bunny.y < 88) {
+    bunny.y = 88;
+    bunny.velocityY = Math.max(0, bunny.velocityY * 0.35);
   }
   bunny.jumpStretch = Math.max(0, Math.min(1, Math.abs(bunny.velocityY) / 18));
 
@@ -1381,7 +1405,9 @@ function drawRunner() {
 
   ctx.fillStyle = "rgba(33, 64, 75, 0.7)";
   ctx.font = "700 22px 'Baloo 2'";
-  const hint = state.pettingTimer > 0
+  const hint = state.runnerFlappyMode
+    ? "Flappy-lage: tryck for att flaxa med Bosse."
+    : state.pettingTimer > 0
     ? "Bosse klappar Sigge... tiden tickar medan han gosar."
     : "Hoppa över elefanter, akta Sigge och ta morötter.";
   ctx.fillText(hint, 28, 38);
@@ -2011,6 +2037,8 @@ cheatForm.addEventListener("submit", (event) => {
     activateCharlieCheat();
   } else if (code === "pelle") {
     activatePelleCheat();
+  } else if (code === "flappy") {
+    activateFlappyCheat();
   } else {
     cheatFeedback.textContent = "Fel kod.";
     return;
