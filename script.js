@@ -115,6 +115,7 @@ const state = {
   runnerFlyingElephants: false,
   runnerCarrotRainTimer: 0,
   runnerCarrotRainSpawnTimer: 0,
+  runnerSuperTimer: 0,
   leaderboardEntries: [],
   leaderboardGame: null,
   pendingScoreEntry: null,
@@ -354,6 +355,7 @@ function resetRunnerState(resetScore) {
   state.runnerFlyingElephants = false;
   state.runnerCarrotRainTimer = 0;
   state.runnerCarrotRainSpawnTimer = 0;
+  state.runnerSuperTimer = 0;
   state.elephants = [];
   state.carrots = [];
   state.sigges = [];
@@ -899,6 +901,23 @@ function activateMorotCheat() {
   cheatFeedback.textContent = "Morot aktiverad. Det regnar morötter i 10 sekunder!";
 }
 
+function activateSuperBosseCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  state.runnerSuperTimer = 10000;
+  cheatFeedback.textContent = "SuperBosse aktiverad. Bosse blir supersnabb och odödlig i 10 sekunder!";
+}
+
+function isSuperBosseActive() {
+  return state.runnerSuperTimer > 0;
+}
+
+function isSuperBosseAuraActive() {
+  return state.runnerSuperTimer > 2000;
+}
+
 function jump() {
   if (!state.running || state.gameOver || state.mode !== "runner") {
     return;
@@ -948,7 +967,11 @@ function updateRunner(delta) {
   const bunny = state.bunny;
   const frameScale = delta / (1000 / 60);
   state.distance += delta * 0.01;
-  const targetSpeed = baseSpeed + Math.min(5, state.distance * 0.018);
+  if (state.runnerSuperTimer > 0) {
+    state.runnerSuperTimer = Math.max(0, state.runnerSuperTimer - delta);
+  }
+  const speedMultiplier = isSuperBosseActive() ? 2 : 1;
+  const targetSpeed = (baseSpeed + Math.min(5, state.distance * 0.018)) * speedMultiplier;
   const pettingSlowdown = state.pettingTimer > 0 ? 2.8 : 0;
   state.speed = Math.max(2.4, targetSpeed - pettingSlowdown);
   state.cloudsOffset += state.speed * 0.15 * frameScale;
@@ -1022,12 +1045,21 @@ function updateRunner(delta) {
   }
 
   for (const elephant of state.elephants) {
-    elephant.x -= state.speed * frameScale;
+    if (elephant.launched) {
+      elephant.launchVx -= 0.18 * frameScale;
+      elephant.launchVy += 0.56 * frameScale;
+      elephant.x += elephant.launchVx * frameScale;
+      elephant.launchY += elephant.launchVy * frameScale;
+      elephant.rotation = (elephant.rotation || 0) + 0.18 * frameScale;
+      elephant.renderY = elephant.launchY;
+      continue;
+    }
     if (elephant.flying) {
       elephant.renderY = elephant.baseY + Math.sin(performance.now() * elephant.bobSpeed + elephant.bobOffset) * elephant.bobAmplitude;
     } else {
       elephant.renderY = elephant.y;
     }
+    elephant.x -= state.speed * frameScale;
   }
   for (const carrot of state.carrots) {
     carrot.x -= (state.speed + 0.8) * frameScale;
@@ -1048,7 +1080,12 @@ function updateRunner(delta) {
     }
   }
 
-  state.elephants = state.elephants.filter((elephant) => elephant.x + elephant.width > -30);
+  state.elephants = state.elephants.filter((elephant) => {
+    if (elephant.launched) {
+      return elephant.x < canvas.width + 180 && elephant.renderY + elephant.height > -160;
+    }
+    return elephant.x + elephant.width > -30;
+  });
   state.carrots = state.carrots.filter((carrot) => carrot.x + carrot.width > -20 && !carrot.collected);
   state.sigges = state.sigges.filter((sigge) => sigge.x + sigge.width > -30);
 
@@ -1066,6 +1103,15 @@ function updateRunner(delta) {
       width: elephant.width - 18,
       height: elephant.height - 14,
     })) {
+      if (isSuperBosseActive()) {
+        elephant.launched = true;
+        elephant.launchVx = 18 + Math.random() * 4;
+        elephant.launchVy = -12 - Math.random() * 3;
+        elephant.launchY = elephant.renderY ?? elephant.y;
+        elephant.rotation = 0;
+        elephant.x += 12;
+        continue;
+      }
       endGame(`En elefant tog Bosse. Du fick ${state.score} poäng.`);
       return;
     }
@@ -1428,13 +1474,23 @@ function drawRunner() {
     drawSigge(sigge);
   }
   for (const elephant of state.elephants) {
-    drawElephant(elephant.x, elephant.renderY ?? elephant.y, elephant.width, elephant.height, false, elephant.flying);
+    if (elephant.launched) {
+      ctx.save();
+      ctx.translate(elephant.x + elephant.width / 2, (elephant.renderY ?? elephant.y) - elephant.height / 2);
+      ctx.rotate(elephant.rotation || 0);
+      drawElephant(-elephant.width / 2, elephant.height / 2, elephant.width, elephant.height, false, elephant.flying);
+      ctx.restore();
+    } else {
+      drawElephant(elephant.x, elephant.renderY ?? elephant.y, elephant.width, elephant.height, false, elephant.flying);
+    }
   }
   drawBunnyRunner();
 
   ctx.fillStyle = "rgba(33, 64, 75, 0.7)";
   ctx.font = "700 22px 'Baloo 2'";
-  const hint = state.runnerFlappyMode
+  const hint = isSuperBosseActive()
+    ? "SuperBosse-lage: Bosse blinkar, springer dubbelt sa snabbt och studsar bort elefanter."
+    : state.runnerFlappyMode
     ? "Flappy-lage: tryck for att flaxa med Bosse."
     : state.runnerCarrotRainTimer > 0
     ? "Morot-lage: det regnar morotter!"
@@ -1539,6 +1595,28 @@ function drawCloud(x, y, scale) {
 }
 
 function drawBunnyRunner() {
+  if (isSuperBosseAuraActive()) {
+    const neonColors = ["#44f7ff", "#ff5cf4", "#b8ff35", "#ffe45e"];
+    const colorIndex = Math.floor(performance.now() / 90) % neonColors.length;
+    const neon = neonColors[colorIndex];
+    ctx.save();
+    ctx.translate(state.bunny.x + state.bunny.width * 0.48, state.bunny.y - state.bunny.height * 0.38);
+    const aura = ctx.createRadialGradient(0, 0, 10, 0, 0, 58);
+    aura.addColorStop(0, `${neon}aa`);
+    aura.addColorStop(0.45, `${neon}4a`);
+    aura.addColorStop(1, `${neon}00`);
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.ellipse(0, 6, 52, 66, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = neon;
+    ctx.shadowBlur = 26;
+    drawBunnyShape(state.bunny.x, state.bunny.y - state.bunny.height, state.bunny.jumpStretch);
+    ctx.restore();
+    return;
+  }
   drawBunnyShape(state.bunny.x, state.bunny.y - state.bunny.height, state.bunny.jumpStretch);
 }
 
@@ -2072,6 +2150,8 @@ cheatForm.addEventListener("submit", (event) => {
     activateFlappyCheat();
   } else if (code === "morot") {
     activateMorotCheat();
+  } else if (code === "superbosse") {
+    activateSuperBosseCheat();
   } else {
     cheatFeedback.textContent = "Fel kod.";
     return;
