@@ -113,6 +113,8 @@ const state = {
   cheatOpen: false,
   runnerFlappyMode: false,
   runnerFlyingElephants: false,
+  runnerCarrotRainTimer: 0,
+  runnerCarrotRainSpawnTimer: 0,
   leaderboardEntries: [],
   leaderboardGame: null,
   pendingScoreEntry: null,
@@ -350,6 +352,8 @@ function resetRunnerState(resetScore) {
   state.mazeMessageTimer = 0;
   state.runnerFlappyMode = false;
   state.runnerFlyingElephants = false;
+  state.runnerCarrotRainTimer = 0;
+  state.runnerCarrotRainSpawnTimer = 0;
   state.elephants = [];
   state.carrots = [];
   state.sigges = [];
@@ -872,6 +876,29 @@ function activateFlappyCheat() {
   cheatFeedback.textContent = "Flappy aktiverad. Bosse kan nu flyga!";
 }
 
+function spawnRunnerCarrotBurst(count, baseX = canvas.width + 70) {
+  for (let index = 0; index < count; index += 1) {
+    state.carrots.push({
+      x: baseX + Math.random() * 120 + index * (10 + Math.random() * 10),
+      y: 78 + Math.random() * 220,
+      width: 30,
+      height: 18,
+      collected: false,
+    });
+  }
+}
+
+function activateMorotCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  state.runnerCarrotRainTimer = 10000;
+  state.runnerCarrotRainSpawnTimer = 0;
+  spawnRunnerCarrotBurst(10, canvas.width + 30);
+  cheatFeedback.textContent = "Morot aktiverad. Det regnar morötter i 10 sekunder!";
+}
+
 function jump() {
   if (!state.running || state.gameOver || state.mode !== "runner") {
     return;
@@ -929,6 +956,16 @@ function updateRunner(delta) {
   if (state.pettingTimer > 0) {
     state.pettingTimer = Math.max(0, state.pettingTimer - delta);
   }
+  if (state.runnerCarrotRainTimer > 0) {
+    state.runnerCarrotRainTimer = Math.max(0, state.runnerCarrotRainTimer - delta);
+    state.runnerCarrotRainSpawnTimer += delta;
+    while (state.runnerCarrotRainSpawnTimer >= 160) {
+      spawnRunnerCarrotBurst(4 + Math.floor(Math.random() * 3));
+      state.runnerCarrotRainSpawnTimer -= 160;
+    }
+  } else {
+    state.runnerCarrotRainSpawnTimer = 0;
+  }
 
   const activeGravity = state.runnerFlappyMode ? flappyGravity : gravity;
   bunny.velocityY += activeGravity * frameScale;
@@ -965,15 +1002,7 @@ function updateRunner(delta) {
   state.carrotTimer += delta;
   if (state.carrotTimer > carrotInterval) {
     const carrotCount = Math.random() < 0.35 ? 2 : 1;
-    for (let index = 0; index < carrotCount; index += 1) {
-      state.carrots.push({
-        x: canvas.width + 60 + index * (34 + Math.random() * 12),
-        y: 190 + Math.random() * 85,
-        width: 30,
-        height: 18,
-        collected: false,
-      });
-    }
+    spawnRunnerCarrotBurst(carrotCount, canvas.width + 60);
     state.carrotTimer = 0;
   }
 
@@ -1407,6 +1436,8 @@ function drawRunner() {
   ctx.font = "700 22px 'Baloo 2'";
   const hint = state.runnerFlappyMode
     ? "Flappy-lage: tryck for att flaxa med Bosse."
+    : state.runnerCarrotRainTimer > 0
+    ? "Morot-lage: det regnar morotter!"
     : state.pettingTimer > 0
     ? "Bosse klappar Sigge... tiden tickar medan han gosar."
     : "Hoppa över elefanter, akta Sigge och ta morötter.";
@@ -2039,6 +2070,8 @@ cheatForm.addEventListener("submit", (event) => {
     activatePelleCheat();
   } else if (code === "flappy") {
     activateFlappyCheat();
+  } else if (code === "morot") {
+    activateMorotCheat();
   } else {
     cheatFeedback.textContent = "Fel kod.";
     return;
