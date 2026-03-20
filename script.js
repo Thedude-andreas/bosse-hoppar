@@ -99,9 +99,9 @@ const joystickState = {
 };
 const hockeyRink = {
   x: 300,
-  y: 28,
+  y: 72,
   width: 360,
-  height: 364,
+  height: 320,
 };
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
@@ -1091,11 +1091,12 @@ function getHockeyStickPose(charge = 0) {
   const pivotY = bodyY - 4;
   const swingAngle = charge * 1.15;
   const shaftLength = 58;
-  const bladeLength = 18;
+  const bladeLength = 16;
   const dirX = Math.cos(swingAngle);
   const dirY = Math.sin(swingAngle);
-  const bladeDirX = -Math.sin(swingAngle);
-  const bladeDirY = Math.cos(swingAngle);
+  const bladeAngle = swingAngle + 0.14;
+  const bladeDirX = Math.cos(bladeAngle);
+  const bladeDirY = Math.sin(bladeAngle);
   const handleX = pivotX - dirX * 6;
   const handleY = pivotY - dirY * 6;
   const bladeBaseX = pivotX + dirX * shaftLength;
@@ -1181,7 +1182,13 @@ function reflectHockeyShotFromGoalie(shot, incomingVx, incomingVy) {
 }
 
 function beginHockeyCharge(pointerX = null, pointerY = null, pointerId = null) {
-  if (state.mode !== "hockey" || state.gameOver || !state.running || state.hockey.shots.length) {
+  if (
+    state.mode !== "hockey" ||
+    state.gameOver ||
+    !state.running ||
+    state.hockey.shots.length ||
+    state.hockey.charging
+  ) {
     return;
   }
   state.hockey.charging = true;
@@ -1200,7 +1207,7 @@ function updateHockeyCharge(pointerX, pointerY) {
     state.hockey.shotPower = clamp((pointerY - state.hockey.dragStartY) / 160, 0, 1);
   }
   if (typeof pointerX === "number") {
-    state.hockey.aim = clamp((pointerX - state.hockey.dragStartX) / 140, -1, 1);
+    state.hockey.aim = clamp((pointerX - state.hockey.dragStartX) / 95, -1, 1);
   }
 }
 
@@ -1337,7 +1344,7 @@ function updateHockey(delta) {
   const frameScale = delta / (1000 / 60);
   if (hockey.charging && hockey.dragPointerId === null) {
     hockey.shotPower = clamp(hockey.shotPower + delta * 0.0012, 0, 1);
-    hockey.aim = clamp(hockey.aim + hockey.steer * delta * 0.0015, -1, 1);
+    hockey.aim = clamp(hockey.aim + hockey.steer * delta * 0.0028, -1, 1);
   }
 
   if (hockey.messageTimer > 0) {
@@ -1348,7 +1355,12 @@ function updateHockey(delta) {
   }
 
   const goalie = hockey.goalie;
-  if (!hockey.shots.length && !hockey.charging) {
+  if (hockey.charging && !hockey.shots.length) {
+    goalie.targetX = getHockeyAimTarget().x;
+    if (goalie.mood !== "alert") {
+      goalie.mood = "alert";
+    }
+  } else if (!hockey.shots.length && !hockey.charging) {
     goalie.targetX = getHockeyGoalBounds().centerX;
     if (goalie.mood !== "ready") {
       goalie.mood = "ready";
@@ -1357,7 +1369,9 @@ function updateHockey(delta) {
   if (goalie.reactionDelay > 0) {
     goalie.reactionDelay = Math.max(0, goalie.reactionDelay - delta);
   } else {
-    const moveSpeed = 0.038 + hockey.goals * 0.0018;
+    const moveSpeed = hockey.charging && !hockey.shots.length
+      ? 0.018 + hockey.goals * 0.0008
+      : 0.038 + hockey.goals * 0.0018;
     goalie.x += (goalie.targetX - goalie.x) * Math.min(1, moveSpeed * frameScale);
   }
   goalie.x = clamp(goalie.x, getHockeyGoalBounds().left + 18, getHockeyGoalBounds().right - 18);
@@ -1978,7 +1992,7 @@ function drawHockey() {
   drawHockeyBosse();
 
   ctx.fillStyle = "rgba(255,255,255,0.94)";
-  ctx.font = "700 22px 'Baloo 2'";
+  ctx.font = "700 18px 'Baloo 2'";
   const hint = state.hockey.charging
     ? "Håll nere för att ladda. Styr med vänster och höger medan du siktar."
     : state.hockey.messageTimer > 0 && state.hockey.flashType === "goal"
@@ -1988,18 +2002,23 @@ function drawHockey() {
     : state.hockey.messageTimer > 0 && state.hockey.flashType === "level"
     ? state.hockey.message
     : "Pil ned för att ladda. Styr siktet med vänster och höger. På mobil: tryck, dra och släpp.";
-  ctx.fillText(hint, 28, 38);
+  ctx.textAlign = "left";
+  ctx.fillText(hint, 28, 34);
 
   ctx.textAlign = "right";
-  ctx.fillText(`Total poäng ${state.score}  Level ${state.hockey.level}`, canvas.width - 28, 38);
+  ctx.fillText(`Total ${state.score}`, canvas.width - 28, 26);
+  ctx.fillText(`Level ${state.hockey.level}`, canvas.width - 28, 46);
   ctx.textAlign = "left";
 }
 
 function drawHockeyCrowd() {
+  ctx.fillStyle = "rgba(8, 38, 62, 0.92)";
+  ctx.fillRect(0, 0, canvas.width, 60);
+
   for (let row = 0; row < 4; row += 1) {
     for (let col = 0; col < 11; col += 1) {
       const x = 70 + col * 74 + (row % 2) * 18;
-      const y = 16 + row * 14;
+      const y = 68 + row * 14;
       ctx.fillStyle = ["#f7d34e", "#ff8b6b", "#78d0ff", "#d8f4ff"][(row + col) % 4];
       ctx.beginPath();
       ctx.arc(x, y, 9 - row * 0.7, 0, Math.PI * 2);
@@ -2120,7 +2139,7 @@ function drawHockeyBosse() {
   ctx.strokeStyle = "#f4d97d";
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(stickPose.bladeBaseX - x, stickPose.bladeBaseY - y);
+  ctx.moveTo(stickPose.bladeBaseX - x - Math.cos(stickPose.swingAngle) * 4, stickPose.bladeBaseY - y - Math.sin(stickPose.swingAngle) * 4);
   ctx.lineTo(stickPose.bladeTipX - x, stickPose.bladeTipY - y);
   ctx.stroke();
   ctx.restore();
@@ -2168,10 +2187,6 @@ function drawGoalieAlf() {
   ctx.moveTo(12, 12);
   ctx.lineTo(padSpread, 24);
   ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.75)";
-  ctx.font = "700 16px 'Baloo 2'";
-  ctx.textAlign = "center";
-  ctx.fillText("ALF", 0, 6);
   ctx.restore();
 }
 

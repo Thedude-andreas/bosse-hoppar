@@ -13,14 +13,47 @@ set -a
 source "$ENV_FILE"
 set +a
 
+local_files=(
+  "index.html"
+  "style.css"
+  "script.js"
+  "supabase-config.js"
+)
+
+local_dirs=(
+  "assets"
+)
+
 lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
 set sftp:auto-confirm yes
 cd "$DEPLOY_PATH"
-rm -r bosse-hoppar/.git
-mirror -R --delete --verbose \
-  --exclude-glob .git \
-  --exclude-glob .git/** \
-  --exclude-glob .DS_Store \
-  ./ bosse-hoppar/
+mkdir -p bosse-hoppar
+cd bosse-hoppar
+rm -f index.html style.css script.js supabase-config.js
+rm -rf assets
 bye
 EOF
+
+for file in "${local_files[@]}"; do
+  if [[ -f "$file" ]]; then
+    lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
+set sftp:auto-confirm yes
+cd "$DEPLOY_PATH/bosse-hoppar"
+put "$file"
+bye
+EOF
+  fi
+done
+
+for dir in "${local_dirs[@]}"; do
+  if [[ -d "$dir" ]]; then
+    lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
+set sftp:auto-confirm yes
+cd "$DEPLOY_PATH/bosse-hoppar"
+mirror -R --delete --verbose \
+  --exclude-glob .DS_Store \
+  "$dir" "$dir"
+bye
+EOF
+  fi
+done
