@@ -23,6 +23,11 @@ const nameEntryInput = document.getElementById("name-entry-input");
 const nameEntrySkip = document.getElementById("name-entry-skip");
 const nameEntryFeedback = document.getElementById("name-entry-feedback");
 const gameOverOverlay = document.getElementById("game-over-overlay");
+const hockeyLevelOverlay = document.getElementById("hockey-level-overlay");
+const hockeyLevelTitle = document.getElementById("hockey-level-title");
+const hockeyLevelComment = document.getElementById("hockey-level-comment");
+const hockeyLevelScore = document.getElementById("hockey-level-score");
+const hockeyLevelTotal = document.getElementById("hockey-level-total");
 const cheatOverlay = document.getElementById("cheat-overlay");
 const cheatForm = document.getElementById("cheat-form");
 const cheatInput = document.getElementById("cheat-input");
@@ -173,6 +178,9 @@ function createHockeyState() {
     goals: 0,
     saves: 0,
     shots: [],
+    fireworks: [],
+    levelOverlayOpen: false,
+    pendingNextLevel: 2,
     messageTimer: 2400,
     flashTimer: 0,
     flashType: "",
@@ -433,6 +441,7 @@ function showMenu() {
   updateMobileMode();
   updateShellLayout();
   closeCheatDialog();
+  closeHockeyLevelOverlay();
   closeLeaderboardOverlay();
   closeNameEntryOverlay();
   startOverlay.classList.remove("hidden");
@@ -444,6 +453,7 @@ function startRunnerGame() {
   resetRunnerState(true);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeHockeyLevelOverlay();
   closeLeaderboardOverlay();
   closeNameEntryOverlay();
   closeCheatDialog();
@@ -483,6 +493,7 @@ function loadMazeLevel(levelIndex, resetScore) {
   state.maze = createMazeLevel(levelIndex);
   startOverlay.classList.add("hidden");
   gameOverOverlay.classList.add("hidden");
+  closeHockeyLevelOverlay();
   closeLeaderboardOverlay();
   closeNameEntryOverlay();
   closeCheatDialog();
@@ -504,6 +515,7 @@ function resetHockeyState(resetScore) {
   }
   scoreElement.textContent = String(state.score);
   totalScoreElement.textContent = String(state.score);
+  closeHockeyLevelOverlay();
   updateHud();
 }
 
@@ -754,6 +766,90 @@ function closeNameEntryOverlay() {
   state.pendingScoreEntry = null;
 }
 
+function closeHockeyLevelOverlay() {
+  hockeyLevelOverlay.classList.add("hidden");
+  state.hockey.levelOverlayOpen = false;
+  state.hockey.fireworks = [];
+}
+
+function getHockeyLevelComment(goals) {
+  if (goals === 10) {
+    return "10/10! Helt overkligt.";
+  }
+  if (goals >= 8) {
+    return "Traffsakert!";
+  }
+  if (goals >= 6) {
+    return "Snygga skott.";
+  }
+  if (goals >= 4) {
+    return "Helt okej, Bosse.";
+  }
+  if (goals === 3) {
+    return "Det dar klarade sig.";
+  }
+  if (goals === 2) {
+    return "1 traff ifran game over.";
+  }
+  return "Inte jattebra.";
+}
+
+function createHockeyFireworksBursts(count) {
+  const colors = ["#ffd84d", "#ff8c42", "#7ed7ff", "#ff6f91", "#7ddf6f", "#fff6c4"];
+  const bursts = [];
+  for (let burstIndex = 0; burstIndex < count; burstIndex += 1) {
+    const cx = 180 + Math.random() * (canvas.width - 360);
+    const cy = 90 + Math.random() * 120;
+    const particles = 26 + Math.floor(Math.random() * 14);
+    for (let index = 0; index < particles; index += 1) {
+      const angle = (Math.PI * 2 * index) / particles + Math.random() * 0.2;
+      const speed = 1.8 + Math.random() * 3.6;
+      bursts.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 3 + Math.random() * 4,
+        color: colors[(burstIndex + index) % colors.length],
+        life: 900 + Math.random() * 500,
+      });
+    }
+  }
+  return bursts;
+}
+
+function showHockeyLevelOverlay() {
+  const goals = state.hockey.goalsThisLevel;
+  const nextLevel = state.hockey.level + 1;
+  state.hockey.levelOverlayOpen = true;
+  state.hockey.pendingNextLevel = nextLevel;
+  hockeyLevelTitle.textContent = goals === 10 ? `Level ${state.hockey.level} perfekt!` : `Level ${state.hockey.level} klar`;
+  hockeyLevelComment.textContent = getHockeyLevelComment(goals);
+  hockeyLevelScore.textContent = `Du satte ${goals} av 10 skott.`;
+  hockeyLevelTotal.textContent = `Total poang: ${state.score}. Nasta level: ${nextLevel}.`;
+  if (goals === 10) {
+    state.hockey.fireworks = createHockeyFireworksBursts(6);
+  } else {
+    state.hockey.fireworks = [];
+  }
+  hockeyLevelOverlay.classList.remove("hidden");
+}
+
+function continueHockeyAfterLevel() {
+  if (state.mode !== "hockey" || !state.hockey.levelOverlayOpen) {
+    return;
+  }
+  closeHockeyLevelOverlay();
+  state.hockey.level = state.hockey.pendingNextLevel;
+  state.hockey.shotsTakenLevel = 0;
+  state.hockey.goalsThisLevel = 0;
+  state.hockey.message = `Level ${state.hockey.level}: sätt minst 2 av 10 skott.`;
+  state.hockey.messageTimer = 1800;
+  state.hockey.flashType = "level";
+  state.hockey.flashTimer = 720;
+  updateHud();
+}
+
 function showGameOverOverlay(title, message, restartLabel = "Spela igen", restartAction = "retry-current") {
   gameOverOverlay.querySelector("h2").textContent = title;
   finalScoreElement.textContent = message;
@@ -774,6 +870,7 @@ async function showLeaderboardForGame(game) {
   updateHud();
   updateShellLayout();
   closeCheatDialog();
+  closeHockeyLevelOverlay();
   closeNameEntryOverlay();
   gameOverOverlay.classList.add("hidden");
   startOverlay.classList.add("hidden");
@@ -1248,19 +1345,13 @@ function releaseHockeyShot() {
 }
 
 function advanceHockeyLevel() {
-  state.hockey.level += 1;
-  state.hockey.shotsTakenLevel = 0;
-  state.hockey.goalsThisLevel = 0;
-  state.hockey.message = `Level ${state.hockey.level}: sätt minst 2 av 10 skott.`;
-  state.hockey.messageTimer = 1800;
-  state.hockey.flashType = "level";
-  state.hockey.flashTimer = 720;
-  updateHud();
+  showHockeyLevelOverlay();
 }
 
 function endHockeyGame() {
   state.running = false;
   state.gameOver = true;
+  closeHockeyLevelOverlay();
   persistBestScore();
   updateShellLayout();
   void handleFinishedGame({
@@ -1295,7 +1386,7 @@ function finishHockeyShot(shot) {
   if (insideGoal && !goalieCanSave) {
     state.hockey.goalsThisLevel += 1;
     state.hockey.goals += 1;
-    state.score += 1;
+    state.score += state.hockey.level;
     state.hockey.flashType = "goal";
     state.hockey.flashTimer = 720;
     state.hockey.messageTimer = 1100;
@@ -1326,6 +1417,10 @@ function finishHockeyShot(shot) {
 }
 
 function update(delta) {
+  if (state.mode === "hockey" && state.hockey.levelOverlayOpen) {
+    updateHockeyFireworks(delta);
+    return;
+  }
   if (!state.running) {
     return;
   }
@@ -1336,6 +1431,19 @@ function update(delta) {
     updateHockey(delta);
   } else {
     updateRunner(delta);
+  }
+}
+
+function updateHockeyFireworks(delta) {
+  for (const particle of state.hockey.fireworks) {
+    if (particle.life <= 0) {
+      continue;
+    }
+    particle.life = Math.max(0, particle.life - delta);
+    particle.x += particle.vx;
+    particle.y += particle.vy;
+    particle.vy += 0.06;
+    particle.vx *= 0.992;
   }
 }
 
@@ -1984,6 +2092,7 @@ function drawHockey() {
 
   drawHockeyCrowd();
   drawRink();
+  drawHockeyFireworks();
   drawHockeyAimLine();
   drawGoalieAlf();
   for (const shot of state.hockey.shots) {
@@ -2009,6 +2118,22 @@ function drawHockey() {
   ctx.fillText(`Total ${state.score}`, canvas.width - 28, 26);
   ctx.fillText(`Level ${state.hockey.level}`, canvas.width - 28, 46);
   ctx.textAlign = "left";
+}
+
+function drawHockeyFireworks() {
+  for (const particle of state.hockey.fireworks) {
+    if (particle.life <= 0) {
+      continue;
+    }
+    const alpha = Math.min(1, particle.life / 500);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 function drawHockeyCrowd() {
@@ -2916,6 +3041,12 @@ function frame(timestamp) {
 }
 
 document.addEventListener("keydown", (event) => {
+  if (!hockeyLevelOverlay.classList.contains("hidden")) {
+    event.preventDefault();
+    continueHockeyAfterLevel();
+    return;
+  }
+
   if (!nameEntryOverlay.classList.contains("hidden")) {
     if (event.code === "Escape") {
       const finishConfig = state.pendingScoreEntry?.finishConfig;
@@ -2988,6 +3119,12 @@ document.addEventListener("keyup", (event) => {
 });
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (!hockeyLevelOverlay.classList.contains("hidden")) {
+    event.preventDefault();
+    continueHockeyAfterLevel();
+    return;
+  }
+
   if (state.mode === "hockey") {
     beginHockeyCharge(event.clientX, event.clientY, event.pointerId);
     updateHockeyCharge(event.clientX, event.clientY);
@@ -3135,6 +3272,11 @@ cheatOverlay.addEventListener("pointerdown", (event) => {
   if (event.target === cheatOverlay) {
     closeCheatDialog();
   }
+});
+
+hockeyLevelOverlay.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  continueHockeyAfterLevel();
 });
 
 joystickBase.addEventListener("pointerdown", (event) => {

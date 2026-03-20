@@ -180,6 +180,10 @@ canvas {
   width: min(520px, 100%);
 }
 
+#hockey-level-overlay {
+  background: rgba(8, 38, 62, 0.34);
+}
+
 .leaderboard-list {
   margin: 14px 0 0;
   padding: 0;
