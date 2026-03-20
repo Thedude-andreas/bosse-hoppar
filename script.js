@@ -1,7 +1,12 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const levelCaptionElement = document.getElementById("level-caption");
+const scoreCaptionElement = document.getElementById("score-caption");
 const scoreElement = document.getElementById("score");
+const totalCardElement = document.getElementById("total-card");
+const totalScoreElement = document.getElementById("total-score");
 const scoreCard = document.getElementById("score-card");
+const bestCaptionElement = document.getElementById("best-caption");
 const bestScoreElement = document.getElementById("best-score");
 const levelLabelElement = document.getElementById("level-label");
 const startOverlay = document.getElementById("start-overlay");
@@ -27,6 +32,7 @@ const finalScoreElement = document.getElementById("final-score");
 const gameShell = document.getElementById("game-shell");
 const runnerButton = document.getElementById("runner-button");
 const mazeButton = document.getElementById("maze-button");
+const hockeyButton = document.getElementById("hockey-button");
 const restartButton = document.getElementById("restart-button");
 const menuButton = document.getElementById("menu-button");
 const joystick = document.getElementById("joystick");
@@ -47,10 +53,12 @@ const leaderboardLimit = 10;
 const leaderboardStorageKeys = {
   runner: "bosse-hoppar-runner-scores",
   maze: "bosse-hoppar-maze-scores",
+  hockey: "bosse-hoppar-hockey-scores",
 };
 const gameMeta = {
   runner: { key: "runner", label: "Bosse Hoppar" },
   maze: { key: "maze", label: "Bosse Vimsar" },
+  hockey: { key: "hockey", label: "Bosse på is" },
 };
 const mazeCell = 40;
 const totalMazeLevels = 10;
@@ -89,9 +97,17 @@ const joystickState = {
   active: false,
   pointerId: null,
 };
+const hockeyRink = {
+  x: 300,
+  y: 28,
+  width: 360,
+  height: 364,
+};
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
 let supabaseClient = null;
+const crocodileSprite = new Image();
+crocodileSprite.src = "assets/crocodile-photo-sprite.png";
 
 const state = {
   running: false,
@@ -116,6 +132,7 @@ const state = {
   runnerCarrotRainTimer: 0,
   runnerCarrotRainSpawnTimer: 0,
   runnerSuperTimer: 0,
+  runnerCrocodile: null,
   leaderboardEntries: [],
   leaderboardGame: null,
   pendingScoreEntry: null,
@@ -131,6 +148,7 @@ const state = {
   carrots: [],
   sigges: [],
   maze: createMazeState(),
+  hockey: createHockeyState(),
 };
 
 bestScoreElement.textContent = "0";
@@ -138,6 +156,35 @@ updateHud();
 
 function createMazeState() {
   return createMazeLevel(0);
+}
+
+function createHockeyState() {
+  return {
+    level: 1,
+    shotsTakenLevel: 0,
+    goalsThisLevel: 0,
+    charging: false,
+    shotPower: 0,
+    aim: 0,
+    steer: 0,
+    dragPointerId: null,
+    dragStartX: 0,
+    dragStartY: 0,
+    goals: 0,
+    saves: 0,
+    shots: [],
+    messageTimer: 2400,
+    flashTimer: 0,
+    flashType: "",
+    message: "Level 1: sätt minst 2 av 10 skott.",
+    goalie: {
+      x: canvas.width / 2,
+      targetX: canvas.width / 2,
+      reactionDelay: 0,
+      reach: 22,
+      mood: "ready",
+    },
+  };
 }
 
 function createMazeLevel(levelIndex) {
@@ -356,6 +403,7 @@ function resetRunnerState(resetScore) {
   state.runnerCarrotRainTimer = 0;
   state.runnerCarrotRainSpawnTimer = 0;
   state.runnerSuperTimer = 0;
+  state.runnerCrocodile = null;
   state.elephants = [];
   state.carrots = [];
   state.sigges = [];
@@ -379,6 +427,7 @@ function showMenu() {
   state.leaderboardEntries = [];
   state.leaderboardGame = null;
   scoreElement.textContent = "0";
+  totalScoreElement.textContent = "0";
   bestScoreElement.textContent = "0";
   updateHud();
   updateMobileMode();
@@ -407,6 +456,18 @@ function startMazeGame() {
   loadMazeLevel(0, true);
 }
 
+function startHockeyGame() {
+  requestGameFullscreen();
+  resetHockeyState(true);
+  startOverlay.classList.add("hidden");
+  gameOverOverlay.classList.add("hidden");
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
+  closeCheatDialog();
+  updateMobileMode();
+  updateShellLayout();
+}
+
 function loadMazeLevel(levelIndex, resetScore) {
   state.mode = "maze";
   state.selectedGame = "maze";
@@ -429,6 +490,21 @@ function loadMazeLevel(levelIndex, resetScore) {
   updateHud();
   updateMobileMode();
   updateShellLayout();
+}
+
+function resetHockeyState(resetScore) {
+  state.mode = "hockey";
+  state.selectedGame = "hockey";
+  state.running = true;
+  state.gameOver = false;
+  state.lastTime = 0;
+  state.hockey = createHockeyState();
+  if (resetScore) {
+    state.score = 0;
+  }
+  scoreElement.textContent = String(state.score);
+  totalScoreElement.textContent = String(state.score);
+  updateHud();
 }
 
 function completeMazeLevel() {
@@ -495,6 +571,11 @@ function persistBestScore() {
 }
 
 function updateHud() {
+  const isHockey = state.mode === "hockey";
+  totalCardElement.classList.toggle("hidden", !isHockey);
+  levelCaptionElement.textContent = isHockey ? "Level" : "Spel";
+  scoreCaptionElement.textContent = isHockey ? "Skott" : "Poäng";
+  bestCaptionElement.textContent = "Bästa";
   if (state.mode === "menu") {
     if (state.selectedGame && gameMeta[state.selectedGame]) {
       levelLabelElement.textContent = gameMeta[state.selectedGame].label.replace("Bosse ", "");
@@ -506,6 +587,10 @@ function updateHud() {
   if (state.mode === "maze") {
     const levelNumber = state.maze?.levelNumber || 1;
     levelLabelElement.textContent = `Vimsar ${levelNumber}/${totalMazeLevels}`;
+  } else if (state.mode === "hockey") {
+    levelLabelElement.textContent = String(state.hockey.level);
+    scoreElement.textContent = `${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel}`;
+    totalScoreElement.textContent = String(state.score);
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
@@ -685,6 +770,7 @@ async function showLeaderboardForGame(game) {
   state.gameOver = false;
   state.score = 0;
   scoreElement.textContent = "0";
+  totalScoreElement.textContent = "0";
   updateHud();
   updateShellLayout();
   closeCheatDialog();
@@ -910,12 +996,39 @@ function activateSuperBosseCheat() {
   cheatFeedback.textContent = "SuperBosse aktiverad. Bosse blir supersnabb och odödlig i 10 sekunder!";
 }
 
+function activateKrokodilCheat() {
+  if (state.mode !== "runner") {
+    cheatFeedback.textContent = "Starta Bosse Hoppar först.";
+    return;
+  }
+  state.runnerCrocodile = {
+    x: state.bunny.x + 96,
+    y: groundY + 4,
+    width: 138,
+    height: 92,
+    timer: 10000,
+    mode: "active",
+    facing: 1,
+    stride: 0,
+  };
+  cheatFeedback.textContent = "Krokodil aktiverad. Den springer framfor Bosse i 10 sekunder!";
+}
+
 function isSuperBosseActive() {
   return state.runnerSuperTimer > 0;
 }
 
 function isSuperBosseAuraActive() {
   return state.runnerSuperTimer > 2000;
+}
+
+function launchRunnerElephant(elephant, sourceX, boost = 1) {
+  elephant.launched = true;
+  elephant.launchVx = (16 + Math.random() * 4) * boost;
+  elephant.launchVy = -11 - Math.random() * 3;
+  elephant.launchY = elephant.renderY ?? elephant.y;
+  elephant.rotation = 0;
+  elephant.x = Math.max(elephant.x, sourceX + 6);
 }
 
 function jump() {
@@ -951,6 +1064,260 @@ function handleRunnerJump() {
   jump();
 }
 
+function getHockeyGoalBounds() {
+  return {
+    left: hockeyRink.x + 100,
+    right: hockeyRink.x + hockeyRink.width - 100,
+    top: hockeyRink.y + 26,
+    bottom: hockeyRink.y + 60,
+    centerX: hockeyRink.x + hockeyRink.width / 2,
+    lineY: hockeyRink.y + 52,
+    creaseY: hockeyRink.y + 92,
+  };
+}
+
+function getHockeyAimTarget(aim = state.hockey.aim) {
+  const goal = getHockeyGoalBounds();
+  return {
+    x: lerp(goal.left + 12, goal.right - 12, (clamp(aim, -1, 1) + 1) * 0.5),
+    y: goal.lineY - 4,
+  };
+}
+
+function getHockeyStickPose(charge = 0) {
+  const bodyX = hockeyRink.x + hockeyRink.width / 2;
+  const bodyY = hockeyRink.y + hockeyRink.height - 54;
+  const pivotX = bodyX + 6;
+  const pivotY = bodyY - 4;
+  const swingAngle = charge * 1.15;
+  const shaftLength = 58;
+  const bladeLength = 18;
+  const dirX = Math.cos(swingAngle);
+  const dirY = Math.sin(swingAngle);
+  const bladeDirX = -Math.sin(swingAngle);
+  const bladeDirY = Math.cos(swingAngle);
+  const handleX = pivotX - dirX * 6;
+  const handleY = pivotY - dirY * 6;
+  const bladeBaseX = pivotX + dirX * shaftLength;
+  const bladeBaseY = pivotY + dirY * shaftLength;
+  const bladeTipX = bladeBaseX + bladeDirX * bladeLength;
+  const bladeTipY = bladeBaseY + bladeDirY * bladeLength;
+  const puckX = bladeBaseX + dirX * 10;
+  const puckY = bladeBaseY + dirY * 10;
+
+  return {
+    bodyX,
+    bodyY,
+    pivotX,
+    pivotY,
+    swingAngle,
+    puckX,
+    puckY,
+    handleX,
+    handleY,
+    bladeBaseX,
+    bladeBaseY,
+    bladeTipX,
+    bladeTipY,
+    shaftEndX: pivotX + dirX * (shaftLength - 10),
+    shaftEndY: pivotY + dirY * (shaftLength - 10),
+  };
+}
+
+function getHockeyGoalieBounds() {
+  const goal = getHockeyGoalBounds();
+  const centerX = state.hockey.goalie.x;
+  const centerY = goal.creaseY - 6;
+  return {
+    left: centerX - 19,
+    right: centerX + 19,
+    top: centerY - 21,
+    bottom: centerY + 13,
+  };
+}
+
+function getHockeyGoalieEllipse() {
+  const goal = getHockeyGoalBounds();
+  return {
+    cx: state.hockey.goalie.x,
+    cy: goal.creaseY - 6,
+    rx: 21,
+    ry: 15,
+  };
+}
+
+function hockeyShotHitsGoalie(shotX, shotY, radiusX = 9, radiusY = 6) {
+  const goalie = getHockeyGoalieBounds();
+  return (
+    shotX + radiusX > goalie.left &&
+    shotX - radiusX < goalie.right &&
+    shotY + radiusY > goalie.top &&
+    shotY - radiusY < goalie.bottom
+  );
+}
+
+function reflectHockeyShotFromGoalie(shot, incomingVx, incomingVy) {
+  const ellipse = getHockeyGoalieEllipse();
+  const dx = shot.x - ellipse.cx;
+  const dy = shot.y - ellipse.cy;
+  let nx = dx / (ellipse.rx * ellipse.rx);
+  let ny = dy / (ellipse.ry * ellipse.ry);
+  const normalLength = Math.hypot(nx, ny) || 1;
+  nx /= normalLength;
+  ny /= normalLength;
+
+  const dot = incomingVx * nx + incomingVy * ny;
+  let reflectedVx = incomingVx - 2 * dot * nx;
+  let reflectedVy = incomingVy - 2 * dot * ny;
+
+  if (reflectedVy < 1.8) {
+    reflectedVy = Math.abs(reflectedVy) + 1.8;
+  }
+
+  return {
+    vx: reflectedVx * 0.22,
+    vy: reflectedVy * 0.22,
+  };
+}
+
+function beginHockeyCharge(pointerX = null, pointerY = null, pointerId = null) {
+  if (state.mode !== "hockey" || state.gameOver || !state.running || state.hockey.shots.length) {
+    return;
+  }
+  state.hockey.charging = true;
+  state.hockey.shotPower = 0;
+  state.hockey.steer = 0;
+  state.hockey.dragPointerId = pointerId;
+  state.hockey.dragStartX = pointerX ?? hockeyRink.x + hockeyRink.width / 2;
+  state.hockey.dragStartY = pointerY ?? canvas.height - 38;
+}
+
+function updateHockeyCharge(pointerX, pointerY) {
+  if (state.mode !== "hockey" || !state.hockey.charging) {
+    return;
+  }
+  if (typeof pointerY === "number") {
+    state.hockey.shotPower = clamp((pointerY - state.hockey.dragStartY) / 160, 0, 1);
+  }
+  if (typeof pointerX === "number") {
+    state.hockey.aim = clamp((pointerX - state.hockey.dragStartX) / 140, -1, 1);
+  }
+}
+
+function releaseHockeyShot() {
+  if (state.mode !== "hockey" || !state.hockey.charging || state.hockey.shots.length) {
+    return;
+  }
+  const aim = getHockeyAimTarget();
+  const power = Math.max(0.2, state.hockey.shotPower);
+  const stickPose = getHockeyStickPose(state.hockey.shotPower);
+  const originX = stickPose.puckX;
+  const originY = stickPose.puckY;
+  state.hockey.charging = false;
+  state.hockey.dragPointerId = null;
+  state.hockey.steer = 0;
+  state.hockey.shotPower = 0;
+  state.hockey.goalie.targetX = aim.x;
+  state.hockey.goalie.reactionDelay = Math.max(150, 360 - power * 120);
+  state.hockey.goalie.mood = "alert";
+  state.hockey.shots.push({
+    x: originX,
+    y: originY,
+    startX: originX,
+    startY: originY,
+    targetX: aim.x,
+    targetY: aim.y,
+    progress: 0,
+    power,
+    resolved: false,
+    counted: false,
+    bouncing: false,
+    bounceLife: 0,
+    vx: 0,
+    vy: 0,
+    lastX: originX,
+    lastY: originY,
+  });
+}
+
+function advanceHockeyLevel() {
+  state.hockey.level += 1;
+  state.hockey.shotsTakenLevel = 0;
+  state.hockey.goalsThisLevel = 0;
+  state.hockey.message = `Level ${state.hockey.level}: sätt minst 2 av 10 skott.`;
+  state.hockey.messageTimer = 1800;
+  state.hockey.flashType = "level";
+  state.hockey.flashTimer = 720;
+  updateHud();
+}
+
+function endHockeyGame() {
+  state.running = false;
+  state.gameOver = true;
+  persistBestScore();
+  updateShellLayout();
+  void handleFinishedGame({
+    game: "hockey",
+    score: state.score,
+    title: "Game over",
+    message: "Game over, Bosse missade fler än 8 skott",
+    restartLabel: "Spela igen",
+    restartAction: "retry-current",
+  });
+}
+
+function finishHockeyShot(shot) {
+  const goal = getHockeyGoalBounds();
+  const puckRadiusX = 9;
+  const puckRadiusY = 6;
+  const postMargin = 6;
+  const insideGoalX =
+    shot.x - puckRadiusX > goal.left + postMargin &&
+    shot.x + puckRadiusX < goal.right - postMargin;
+  const insideGoalY =
+    shot.y - puckRadiusY > goal.top + 2 &&
+    shot.y + puckRadiusY < goal.bottom + 14;
+  const insideGoal = insideGoalX && insideGoalY;
+  const goalieCanSave = Boolean(shot.saved);
+  if (shot.counted) {
+    return;
+  }
+  shot.counted = true;
+  state.hockey.shotsTakenLevel += 1;
+
+  if (insideGoal && !goalieCanSave) {
+    state.hockey.goalsThisLevel += 1;
+    state.hockey.goals += 1;
+    state.score += 1;
+    state.hockey.flashType = "goal";
+    state.hockey.flashTimer = 720;
+    state.hockey.messageTimer = 1100;
+    state.hockey.message = `Mål! ${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel} i level ${state.hockey.level}.`;
+    state.hockey.goalie.mood = "beaten";
+  } else {
+    state.hockey.saves += 1;
+    state.hockey.flashType = "save";
+    state.hockey.flashTimer = 720;
+    state.hockey.messageTimer = 1100;
+    state.hockey.message = `Missat skott. ${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel} i level ${state.hockey.level}.`;
+    state.hockey.goalie.mood = "save";
+  }
+
+  if (state.hockey.shotsTakenLevel >= 10) {
+    if (state.hockey.goalsThisLevel < 2) {
+      updateHud();
+      endHockeyGame();
+      return;
+    }
+    advanceHockeyLevel();
+  }
+
+  scoreElement.textContent = `${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel}`;
+  totalScoreElement.textContent = String(state.score);
+  persistBestScore();
+  updateHud();
+}
+
 function update(delta) {
   if (!state.running) {
     return;
@@ -958,14 +1325,93 @@ function update(delta) {
 
   if (state.mode === "maze") {
     updateMaze(delta);
+  } else if (state.mode === "hockey") {
+    updateHockey(delta);
   } else {
     updateRunner(delta);
   }
 }
 
+function updateHockey(delta) {
+  const hockey = state.hockey;
+  const frameScale = delta / (1000 / 60);
+  if (hockey.charging && hockey.dragPointerId === null) {
+    hockey.shotPower = clamp(hockey.shotPower + delta * 0.0012, 0, 1);
+    hockey.aim = clamp(hockey.aim + hockey.steer * delta * 0.0015, -1, 1);
+  }
+
+  if (hockey.messageTimer > 0) {
+    hockey.messageTimer = Math.max(0, hockey.messageTimer - delta);
+  }
+  if (hockey.flashTimer > 0) {
+    hockey.flashTimer = Math.max(0, hockey.flashTimer - delta);
+  }
+
+  const goalie = hockey.goalie;
+  if (!hockey.shots.length && !hockey.charging) {
+    goalie.targetX = getHockeyGoalBounds().centerX;
+    if (goalie.mood !== "ready") {
+      goalie.mood = "ready";
+    }
+  }
+  if (goalie.reactionDelay > 0) {
+    goalie.reactionDelay = Math.max(0, goalie.reactionDelay - delta);
+  } else {
+    const moveSpeed = 0.038 + hockey.goals * 0.0018;
+    goalie.x += (goalie.targetX - goalie.x) * Math.min(1, moveSpeed * frameScale);
+  }
+  goalie.x = clamp(goalie.x, getHockeyGoalBounds().left + 18, getHockeyGoalBounds().right - 18);
+
+  for (const shot of hockey.shots) {
+    if (shot.bouncing) {
+      shot.bounceLife = Math.max(0, shot.bounceLife - delta);
+      shot.x += shot.vx * frameScale;
+      shot.y += shot.vy * frameScale;
+      shot.vy += 0.22 * frameScale;
+      shot.vx *= 0.99;
+      continue;
+    }
+
+    shot.lastX = shot.x;
+    shot.lastY = shot.y;
+    shot.progress = Math.min(1, shot.progress + (0.018 + shot.power * 0.024) * frameScale);
+    shot.x = lerp(shot.startX, shot.targetX, shot.progress);
+    shot.y = lerp(shot.startY, shot.targetY, shot.progress);
+
+    if (!shot.resolved && hockeyShotHitsGoalie(shot.x, shot.y, 6, 4) && shot.y <= getHockeyGoalBounds().creaseY + 8) {
+      shot.saved = true;
+      shot.resolved = true;
+      finishHockeyShot(shot);
+      shot.bouncing = true;
+      shot.bounceLife = 520;
+      const reflected = reflectHockeyShotFromGoalie(
+        shot,
+        shot.x - shot.lastX,
+        shot.y - shot.lastY
+      );
+      shot.vx = reflected.vx;
+      shot.vy = reflected.vy;
+      continue;
+    }
+
+    if (shot.progress >= 1 && !shot.resolved) {
+      shot.resolved = true;
+      finishHockeyShot(shot);
+    }
+  }
+
+  hockey.shots = hockey.shots.filter((shot) => {
+    if (shot.bouncing) {
+      return shot.bounceLife > 0 && shot.y < hockeyRink.y + hockeyRink.height + 28;
+    }
+    return shot.progress < 1 || !shot.resolved;
+  });
+}
+
 function updateRunner(delta) {
   const bunny = state.bunny;
   const frameScale = delta / (1000 / 60);
+  const crocodile = state.runnerCrocodile;
   state.distance += delta * 0.01;
   if (state.runnerSuperTimer > 0) {
     state.runnerSuperTimer = Math.max(0, state.runnerSuperTimer - delta);
@@ -988,6 +1434,26 @@ function updateRunner(delta) {
     }
   } else {
     state.runnerCarrotRainSpawnTimer = 0;
+  }
+  if (crocodile) {
+    crocodile.stride += delta * 0.015;
+    if (crocodile.mode === "active") {
+      crocodile.timer = Math.max(0, crocodile.timer - delta);
+      crocodile.facing = 1;
+      const targetX = bunny.x + 108;
+      crocodile.x += (targetX - crocodile.x) * Math.min(1, 0.12 * frameScale);
+      crocodile.y = groundY + 4 + Math.sin(crocodile.stride) * 1.5;
+      if (crocodile.timer === 0) {
+        crocodile.mode = "exiting";
+        crocodile.facing = -1;
+      }
+    } else {
+      crocodile.x -= (state.speed + 7.5) * frameScale;
+      crocodile.y = groundY + 4 + Math.sin(crocodile.stride) * 1.5;
+      if (crocodile.x + crocodile.width < -120) {
+        state.runnerCrocodile = null;
+      }
+    }
   }
 
   const activeGravity = state.runnerFlappyMode ? flappyGravity : gravity;
@@ -1104,16 +1570,33 @@ function updateRunner(delta) {
       height: elephant.height - 14,
     })) {
       if (isSuperBosseActive()) {
-        elephant.launched = true;
-        elephant.launchVx = 18 + Math.random() * 4;
-        elephant.launchVy = -12 - Math.random() * 3;
-        elephant.launchY = elephant.renderY ?? elephant.y;
-        elephant.rotation = 0;
-        elephant.x += 12;
+        launchRunnerElephant(elephant, bunnyHitbox.x + bunnyHitbox.width, 1.08);
         continue;
       }
       endGame(`En elefant tog Bosse. Du fick ${state.score} poäng.`);
       return;
+    }
+  }
+
+  if (state.runnerCrocodile) {
+    const crocHitbox = {
+      x: state.runnerCrocodile.x + (state.runnerCrocodile.facing > 0 ? 16 : 28),
+      y: state.runnerCrocodile.y - state.runnerCrocodile.height + 16,
+      width: state.runnerCrocodile.width - 34,
+      height: state.runnerCrocodile.height - 20,
+    };
+    for (const elephant of state.elephants) {
+      if (elephant.launched) {
+        continue;
+      }
+      if (intersects(crocHitbox, {
+        x: elephant.x + 8,
+        y: (elephant.renderY ?? elephant.y) - elephant.height + 10,
+        width: elephant.width - 18,
+        height: elephant.height - 14,
+      })) {
+        launchRunnerElephant(elephant, crocHitbox.x + crocHitbox.width, 1.12);
+      }
     }
   }
 
@@ -1448,6 +1931,17 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function roundRect(context, x, y, width, height, radius) {
+  const limitedRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + limitedRadius, y);
+  context.arcTo(x + width, y, x + width, y + height, limitedRadius);
+  context.arcTo(x + width, y + height, x, y + height, limitedRadius);
+  context.arcTo(x, y + height, x, y, limitedRadius);
+  context.arcTo(x, y, x + width, y, limitedRadius);
+  context.closePath();
+}
+
 function intersects(a, b) {
   return (
     a.x < b.x + b.width &&
@@ -1460,9 +1954,225 @@ function intersects(a, b) {
 function draw() {
   if (state.mode === "maze") {
     drawMaze();
+  } else if (state.mode === "hockey") {
+    drawHockey();
   } else {
     drawRunner();
   }
+}
+
+function drawHockey() {
+  const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bg.addColorStop(0, "#08263e");
+  bg.addColorStop(1, "#0d4268");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawHockeyCrowd();
+  drawRink();
+  drawHockeyAimLine();
+  drawGoalieAlf();
+  for (const shot of state.hockey.shots) {
+    drawHockeyPuck(shot);
+  }
+  drawHockeyBosse();
+
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.font = "700 22px 'Baloo 2'";
+  const hint = state.hockey.charging
+    ? "Håll nere för att ladda. Styr med vänster och höger medan du siktar."
+    : state.hockey.messageTimer > 0 && state.hockey.flashType === "goal"
+    ? state.hockey.message
+    : state.hockey.messageTimer > 0 && state.hockey.flashType === "save"
+    ? state.hockey.message
+    : state.hockey.messageTimer > 0 && state.hockey.flashType === "level"
+    ? state.hockey.message
+    : "Pil ned för att ladda. Styr siktet med vänster och höger. På mobil: tryck, dra och släpp.";
+  ctx.fillText(hint, 28, 38);
+
+  ctx.textAlign = "right";
+  ctx.fillText(`Total poäng ${state.score}  Level ${state.hockey.level}`, canvas.width - 28, 38);
+  ctx.textAlign = "left";
+}
+
+function drawHockeyCrowd() {
+  for (let row = 0; row < 4; row += 1) {
+    for (let col = 0; col < 11; col += 1) {
+      const x = 70 + col * 74 + (row % 2) * 18;
+      const y = 16 + row * 14;
+      ctx.fillStyle = ["#f7d34e", "#ff8b6b", "#78d0ff", "#d8f4ff"][(row + col) % 4];
+      ctx.beginPath();
+      ctx.arc(x, y, 9 - row * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawRink() {
+  ctx.fillStyle = "#eff8ff";
+  roundRect(ctx, hockeyRink.x, hockeyRink.y, hockeyRink.width, hockeyRink.height, 62);
+  ctx.fill();
+
+  ctx.strokeStyle = "#db222b";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.strokeStyle = "#8ac6e8";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(hockeyRink.x + 18, hockeyRink.y + 102);
+  ctx.lineTo(hockeyRink.x + hockeyRink.width - 18, hockeyRink.y + 102);
+  ctx.moveTo(hockeyRink.x + 18, hockeyRink.y + hockeyRink.height - 102);
+  ctx.lineTo(hockeyRink.x + hockeyRink.width - 18, hockeyRink.y + hockeyRink.height - 102);
+  ctx.moveTo(hockeyRink.x + hockeyRink.width / 2, hockeyRink.y + 18);
+  ctx.lineTo(hockeyRink.x + hockeyRink.width / 2, hockeyRink.y + hockeyRink.height - 18);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#db222b";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(hockeyRink.x + hockeyRink.width / 2, hockeyRink.y + hockeyRink.height / 2, 42, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const goal = getHockeyGoalBounds();
+  ctx.fillStyle = "rgba(208, 38, 44, 0.1)";
+  ctx.fillRect(goal.left - 18, goal.lineY - 2, goal.right - goal.left + 36, 38);
+  ctx.strokeStyle = "#d31a22";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(goal.left, goal.top, goal.right - goal.left, goal.bottom - goal.top + 24);
+
+  ctx.strokeStyle = "rgba(60, 118, 164, 0.24)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(goal.centerX, goal.creaseY, 74, 42, 0, Math.PI, 0, true);
+  ctx.stroke();
+}
+
+function drawHockeyAimLine() {
+  if (!state.hockey.charging || state.hockey.shots.length) {
+    return;
+  }
+  const stickPose = getHockeyStickPose(state.hockey.shotPower);
+  const aim = getHockeyAimTarget();
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 99, 71, 0.82)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  ctx.moveTo(stickPose.puckX, stickPose.puckY);
+  ctx.lineTo(aim.x, aim.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHockeyPuck(shot) {
+  ctx.fillStyle = "#11161a";
+  ctx.beginPath();
+  ctx.ellipse(shot.x, shot.y, 9, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.beginPath();
+  ctx.arc(shot.x - 2, shot.y - 1, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHockeyBosse() {
+  const charge = state.hockey.charging ? state.hockey.shotPower : 0;
+  const stickPose = getHockeyStickPose(charge);
+  const x = stickPose.bodyX;
+  const y = stickPose.bodyY;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#7a879d";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 30, 36, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#dfe6ef";
+  ctx.beginPath();
+  ctx.arc(0, -10, 16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#2c3540";
+  ctx.beginPath();
+  ctx.arc(-5, -10, 2, 0, Math.PI * 2);
+  ctx.arc(5, -10, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#f68b2c";
+  ctx.lineWidth = 9;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-18, 8);
+  ctx.lineTo(-20, 38);
+  ctx.moveTo(18, 8);
+  ctx.lineTo(20, 38);
+  ctx.stroke();
+  ctx.strokeStyle = "#7a879d";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(16, -2);
+  ctx.lineTo(stickPose.pivotX - x, stickPose.pivotY - y);
+  ctx.stroke();
+  ctx.strokeStyle = "#4a2f18";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(stickPose.handleX - x, stickPose.handleY - y);
+  ctx.lineTo(stickPose.shaftEndX - x, stickPose.shaftEndY - y);
+  ctx.stroke();
+  ctx.strokeStyle = "#f4d97d";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(stickPose.bladeBaseX - x, stickPose.bladeBaseY - y);
+  ctx.lineTo(stickPose.bladeTipX - x, stickPose.bladeTipY - y);
+  ctx.stroke();
+  ctx.restore();
+
+  if (state.hockey.charging && !state.hockey.shots.length) {
+    ctx.fillStyle = "#11161a";
+    ctx.beginPath();
+    ctx.ellipse(stickPose.puckX, stickPose.puckY, 9, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.beginPath();
+    ctx.arc(stickPose.puckX - 2, stickPose.puckY - 1, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawGoalieAlf() {
+  const goalie = state.hockey.goalie;
+  const goal = getHockeyGoalBounds();
+  const padSpread = goalie.mood === "save" ? 24 : 16;
+  ctx.save();
+  ctx.translate(goalie.x, goal.creaseY - 6);
+  ctx.fillStyle = "#7b4a2d";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 28, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -16, 18, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#c88b5c";
+  ctx.beginPath();
+  ctx.ellipse(0, -12, 14, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#221913";
+  ctx.beginPath();
+  ctx.arc(-5, -18, 2.2, 0, Math.PI * 2);
+  ctx.arc(5, -18, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#f4f8ff";
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-12, 12);
+  ctx.lineTo(-padSpread, 24);
+  ctx.moveTo(12, 12);
+  ctx.lineTo(padSpread, 24);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  ctx.font = "700 16px 'Baloo 2'";
+  ctx.textAlign = "center";
+  ctx.fillText("ALF", 0, 6);
+  ctx.restore();
 }
 
 function drawRunner() {
@@ -1484,12 +2194,19 @@ function drawRunner() {
       drawElephant(elephant.x, elephant.renderY ?? elephant.y, elephant.width, elephant.height, false, elephant.flying);
     }
   }
+  if (state.runnerCrocodile) {
+    drawCrocodile(state.runnerCrocodile);
+  }
   drawBunnyRunner();
 
   ctx.fillStyle = "rgba(33, 64, 75, 0.7)";
   ctx.font = "700 22px 'Baloo 2'";
   const hint = isSuperBosseActive()
     ? "SuperBosse-lage: Bosse blinkar, springer dubbelt sa snabbt och studsar bort elefanter."
+    : state.runnerCrocodile
+    ? state.runnerCrocodile.mode === "active"
+      ? "Krokodil-lage: krokodilen springer framfor Bosse och knuffar undan elefanter."
+      : "Krokodilen vander om och forsvinner at vanster."
     : state.runnerFlappyMode
     ? "Flappy-lage: tryck for att flaxa med Bosse."
     : state.runnerCarrotRainTimer > 0
@@ -1618,6 +2335,175 @@ function drawBunnyRunner() {
     return;
   }
   drawBunnyShape(state.bunny.x, state.bunny.y - state.bunny.height, state.bunny.jumpStretch);
+}
+
+function drawCrocodile(crocodile) {
+  const top = crocodile.y - crocodile.height;
+  const scaleX = crocodile.width / 138;
+  const scaleY = crocodile.height / 92;
+  const sway = Math.sin(crocodile.stride) * 2.8;
+  const armSwing = Math.sin(crocodile.stride) * 5.5;
+
+  if (crocodileSprite.complete && crocodileSprite.naturalWidth > 0) {
+    const spriteRatio = crocodileSprite.naturalWidth / crocodileSprite.naturalHeight;
+    const drawHeight = crocodile.height * 1.1;
+    const drawWidth = drawHeight * spriteRatio;
+    const bounce = Math.sin(crocodile.stride) * 3;
+    ctx.save();
+    ctx.translate(crocodile.x + crocodile.width / 2, crocodile.y - drawHeight * 0.48 + bounce);
+    ctx.scale(-crocodile.facing, 1);
+    ctx.rotate((12 * crocodile.facing * Math.PI) / 180);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(crocodileSprite, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    ctx.restore();
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(crocodile.x + (crocodile.facing < 0 ? crocodile.width : 0), top);
+  ctx.scale(scaleX * crocodile.facing, scaleY);
+
+  const plush = ctx.createLinearGradient(-12, 6, 118, 86);
+  plush.addColorStop(0, "#aeb860");
+  plush.addColorStop(0.52, "#92a246");
+  plush.addColorStop(1, "#788733");
+
+  const shadow = ctx.createLinearGradient(4, 18, 100, 84);
+  shadow.addColorStop(0, "rgba(58, 68, 22, 0.04)");
+  shadow.addColorStop(1, "rgba(58, 68, 22, 0.24)");
+
+  ctx.lineCap = "round";
+  ctx.fillStyle = plush;
+
+  ctx.beginPath();
+  ctx.moveTo(42, 16);
+  ctx.quadraticCurveTo(64, 7, 90, 11);
+  ctx.quadraticCurveTo(113, 15, 116, 26);
+  ctx.quadraticCurveTo(118, 38, 108, 45);
+  ctx.quadraticCurveTo(85, 52, 57, 47);
+  ctx.quadraticCurveTo(35, 41, 33, 29);
+  ctx.quadraticCurveTo(33, 20, 42, 16);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(45, 40);
+  ctx.quadraticCurveTo(58, 35, 66, 42);
+  ctx.lineTo(67, 72);
+  ctx.quadraticCurveTo(65, 82, 55, 83);
+  ctx.quadraticCurveTo(45, 83, 42, 73);
+  ctx.lineTo(41, 47);
+  ctx.quadraticCurveTo(41, 42, 45, 40);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(38, 44);
+  ctx.quadraticCurveTo(28, 42, 16, 47 + sway * 0.2);
+  ctx.quadraticCurveTo(2, 53 + armSwing * 0.25, -8, 67 + armSwing * 0.3);
+  ctx.quadraticCurveTo(-14, 77 + armSwing * 0.1, -6, 82 + armSwing * 0.05);
+  ctx.quadraticCurveTo(4, 84, 12, 73 + armSwing * 0.2);
+  ctx.quadraticCurveTo(25, 59, 37, 55);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(66, 46);
+  ctx.quadraticCurveTo(79, 46, 90, 53 - sway * 0.15);
+  ctx.quadraticCurveTo(101, 63 - armSwing * 0.18, 110, 80 - armSwing * 0.28);
+  ctx.quadraticCurveTo(115, 89 - armSwing * 0.12, 110, 95 - armSwing * 0.08);
+  ctx.quadraticCurveTo(102, 100, 94, 90 - armSwing * 0.08);
+  ctx.quadraticCurveTo(85, 79 - armSwing * 0.22, 73, 63 - armSwing * 0.12);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(47, 81);
+  ctx.quadraticCurveTo(59, 78, 65, 86);
+  ctx.quadraticCurveTo(69, 96, 63, 110);
+  ctx.quadraticCurveTo(57, 124, 55, 136);
+  ctx.quadraticCurveTo(52, 145, 44, 144);
+  ctx.quadraticCurveTo(36, 142, 37, 131);
+  ctx.quadraticCurveTo(39, 117, 42, 104);
+  ctx.quadraticCurveTo(45, 90, 47, 81);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(43, 87);
+  ctx.quadraticCurveTo(22, 83, 0, 78);
+  ctx.quadraticCurveTo(-21, 73, -38, 72);
+  ctx.quadraticCurveTo(-49, 72, -56, 76);
+  ctx.quadraticCurveTo(-48, 81, -36, 84);
+  ctx.quadraticCurveTo(-18, 88, 2, 91);
+  ctx.quadraticCurveTo(24, 95, 42, 97);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(52, 63, 18, 33, 0.03, 0, Math.PI * 2);
+  ctx.fill();
+
+  const stripeColor = "rgba(88, 98, 38, 0.5)";
+  ctx.strokeStyle = stripeColor;
+  ctx.lineWidth = 4.8;
+
+  for (let x = 47; x <= 107; x += 8) {
+    ctx.beginPath();
+    ctx.moveTo(x, 14);
+    ctx.lineTo(x - 1, 45);
+    ctx.stroke();
+  }
+
+  for (let y = 47; y <= 78; y += 6) {
+    ctx.beginPath();
+    ctx.moveTo(44, y);
+    ctx.lineTo(66, y);
+    ctx.stroke();
+  }
+
+  for (let x = 33; x >= -48; x -= 8) {
+    ctx.beginPath();
+    ctx.moveTo(x, 82 + Math.max(0, (33 - x) * 0.03));
+    ctx.lineTo(x - 3, 92 + Math.max(0, (33 - x) * 0.03));
+    ctx.stroke();
+  }
+
+  for (let y = 92; y <= 140; y += 8) {
+    ctx.beginPath();
+    ctx.moveTo(46, y);
+    ctx.lineTo(58, y + 1);
+    ctx.stroke();
+  }
+
+  [
+    [22, 49, -6, 78],
+    [72, 51, 106, 90],
+  ].forEach(([x1, y1, x2, y2]) => {
+    const steps = 5;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const x = x1 + (x2 - x1) * t;
+      const y = y1 + (y2 - y1) * t;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y - 3);
+      ctx.lineTo(x + 4, y + 3);
+      ctx.stroke();
+    }
+  });
+
+  ctx.fillStyle = "#607021";
+  ctx.beginPath();
+  ctx.arc(47, 28, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#708033";
+  ctx.beginPath();
+  ctx.arc(111, 28, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
 }
 
 function drawMazeBunny() {
@@ -2047,6 +2933,18 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (state.mode === "hockey" && state.hockey.charging && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
+    event.preventDefault();
+    state.hockey.steer = event.code === "ArrowLeft" ? -1 : 1;
+    return;
+  }
+
+  if (event.code === "ArrowDown" && state.mode === "hockey") {
+    event.preventDefault();
+    beginHockeyCharge();
+    return;
+  }
+
   if (event.code === "Space" || event.code === "ArrowUp") {
     event.preventDefault();
     if (state.mode === "runner") {
@@ -2060,10 +2958,55 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-canvas.addEventListener("pointerdown", () => {
+document.addEventListener("keyup", (event) => {
+  if (event.code === "ArrowDown" && state.mode === "hockey") {
+    event.preventDefault();
+    releaseHockeyShot();
+    return;
+  }
+  if (state.mode === "hockey" && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
+    event.preventDefault();
+    if ((event.code === "ArrowLeft" && state.hockey.steer < 0) || (event.code === "ArrowRight" && state.hockey.steer > 0)) {
+      state.hockey.steer = 0;
+    }
+  }
+});
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (state.mode === "hockey") {
+    beginHockeyCharge(event.clientX, event.clientY, event.pointerId);
+    updateHockeyCharge(event.clientX, event.clientY);
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
   if (state.mode === "runner") {
     handleRunnerJump();
   }
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (state.mode !== "hockey" || state.hockey.dragPointerId !== event.pointerId) {
+    return;
+  }
+  updateHockeyCharge(event.clientX, event.clientY);
+});
+
+function endHockeyPointer(pointerId) {
+  if (state.mode !== "hockey" || state.hockey.dragPointerId !== pointerId) {
+    return;
+  }
+  if (canvas.hasPointerCapture(pointerId)) {
+    canvas.releasePointerCapture(pointerId);
+  }
+  releaseHockeyShot();
+}
+
+canvas.addEventListener("pointerup", (event) => {
+  endHockeyPointer(event.pointerId);
+});
+
+canvas.addEventListener("pointercancel", (event) => {
+  endHockeyPointer(event.pointerId);
 });
 
 scoreCard.addEventListener("pointerup", () => {
@@ -2087,9 +3030,15 @@ mazeButton.addEventListener("click", () => {
   void showLeaderboardForGame("maze");
 });
 
+hockeyButton.addEventListener("click", () => {
+  void showLeaderboardForGame("hockey");
+});
+
 leaderboardStart.addEventListener("click", () => {
   if (state.selectedGame === "maze") {
     startMazeGame();
+  } else if (state.selectedGame === "hockey") {
+    startHockeyGame();
   } else {
     startRunnerGame();
   }
@@ -2107,6 +3056,8 @@ restartButton.addEventListener("click", () => {
     } else {
       loadMazeLevel(state.maze.levelIndex, false);
     }
+  } else if (state.selectedGame === "hockey") {
+    startHockeyGame();
   } else {
     startRunnerGame();
   }
@@ -2150,6 +3101,8 @@ cheatForm.addEventListener("submit", (event) => {
     activateFlappyCheat();
   } else if (code === "morot") {
     activateMorotCheat();
+  } else if (code === "krokodil") {
+    activateKrokodilCheat();
   } else if (code === "superbosse") {
     activateSuperBosseCheat();
   } else {

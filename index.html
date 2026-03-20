@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260316-04">
+  <link rel="stylesheet" href="style.css?v=20260320-02">
 </head>
 <body>
   <main class="app">
@@ -18,15 +18,19 @@
       </div>
       <div class="scoreboard">
         <div class="score-card">
-          <span>Spel</span>
+          <span id="level-caption">Spel</span>
           <strong id="level-label">Välj</strong>
         </div>
         <div class="score-card" id="score-card">
-          <span>Poäng</span>
+          <span id="score-caption">Poäng</span>
           <strong id="score">0</strong>
         </div>
+        <div class="score-card hidden" id="total-card">
+          <span>Total</span>
+          <strong id="total-score">0</strong>
+        </div>
         <div class="score-card">
-          <span>Bästa</span>
+          <span id="best-caption">Bästa</span>
           <strong id="best-score">0</strong>
         </div>
       </div>
@@ -40,9 +44,11 @@
           <h2>Välj spel</h2>
           <p>Bosse Hoppar är ett hoppspel med elefanter, Sigge och morötter.</p>
           <p>Bosse Vimsar har nu tio labyrintbanor där Bosse samlar flera morötter och undviker allt fler elefanter.</p>
+          <p>Bosse på is är ett hockeyspel i lodvy där du laddar skottet, tajmar hårkorset och försöker överlista ALF i målet.</p>
           <div class="button-row">
             <button id="runner-button" type="button">Bosse Hoppar</button>
             <button id="maze-button" type="button">Bosse Vimsar</button>
+            <button id="hockey-button" type="button">Bosse på is</button>
           </div>
         </div>
       </div>
@@ -113,6 +119,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=20260319-01"></script>
-  <script src="script.js?v=20260319-03"></script>
+  <script src="script.js?v=20260320-02"></script>
 </body>
 </html>
