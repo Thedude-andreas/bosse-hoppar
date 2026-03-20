@@ -27,7 +27,6 @@ const hockeyLevelOverlay = document.getElementById("hockey-level-overlay");
 const hockeyLevelTitle = document.getElementById("hockey-level-title");
 const hockeyLevelComment = document.getElementById("hockey-level-comment");
 const hockeyLevelScore = document.getElementById("hockey-level-score");
-const hockeyLevelTotal = document.getElementById("hockey-level-total");
 const cheatOverlay = document.getElementById("cheat-overlay");
 const cheatForm = document.getElementById("cheat-form");
 const cheatInput = document.getElementById("cheat-input");
@@ -184,7 +183,7 @@ function createHockeyState() {
     messageTimer: 2400,
     flashTimer: 0,
     flashType: "",
-    message: "Level 1: sätt minst 2 av 10 skott.",
+    message: "Level 1: sätt minst 6 av 10 skott.",
     goalie: {
       x: canvas.width / 2,
       targetX: canvas.width / 2,
@@ -788,7 +787,10 @@ function getHockeyLevelComment(goals) {
   if (goals === 3) {
     return "Det dar klarade sig.";
   }
-  if (goals === 2) {
+  if (goals === 6) {
+    return "Precis over gransen.";
+  }
+  if (goals === 5) {
     return "1 traff ifran game over.";
   }
   return "Inte jattebra.";
@@ -826,7 +828,6 @@ function showHockeyLevelOverlay() {
   hockeyLevelTitle.textContent = goals === 10 ? `Level ${state.hockey.level} perfekt!` : `Level ${state.hockey.level} klar`;
   hockeyLevelComment.textContent = getHockeyLevelComment(goals);
   hockeyLevelScore.textContent = `Du satte ${goals} av 10 skott.`;
-  hockeyLevelTotal.textContent = `Total poang: ${state.score}. Nasta level: ${nextLevel}.`;
   if (goals === 10) {
     state.hockey.fireworks = createHockeyFireworksBursts(6);
   } else {
@@ -843,7 +844,7 @@ function continueHockeyAfterLevel() {
   state.hockey.level = state.hockey.pendingNextLevel;
   state.hockey.shotsTakenLevel = 0;
   state.hockey.goalsThisLevel = 0;
-  state.hockey.message = `Level ${state.hockey.level}: sätt minst 2 av 10 skott.`;
+  state.hockey.message = `Level ${state.hockey.level}: sätt minst 6 av 10 skott.`;
   state.hockey.messageTimer = 1800;
   state.hockey.flashType = "level";
   state.hockey.flashTimer = 720;
@@ -1358,7 +1359,7 @@ function endHockeyGame() {
     game: "hockey",
     score: state.score,
     title: "Game over",
-    message: "Game over, Bosse missade fler än 8 skott",
+    message: "Game over, Bosse satte färre än 6 skott",
     restartLabel: "Spela igen",
     restartAction: "retry-current",
   });
@@ -1402,7 +1403,7 @@ function finishHockeyShot(shot) {
   }
 
   if (state.hockey.shotsTakenLevel >= 10) {
-    if (state.hockey.goalsThisLevel < 2) {
+    if (state.hockey.goalsThisLevel < 6) {
       updateHud();
       endHockeyGame();
       return;
