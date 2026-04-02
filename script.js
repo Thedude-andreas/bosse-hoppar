@@ -52,7 +52,6 @@ const baseSpeed = 6.2;
 const elephantInterval = 1280;
 const carrotInterval = 2100;
 const siggeInterval = 4200;
-const bestScoreKey = "bosse-hoppar-best-score";
 const leaderboardLimit = 10;
 const leaderboardStorageKeys = {
   runner: "bosse-hoppar-runner-scores",
@@ -736,23 +735,27 @@ function renderLeaderboard(entries) {
 
   for (let index = 0; index < leaderboardLimit; index += 1) {
     const entry = entries[index];
-    const item = document.createElement("li");
-    item.className = "leaderboard-item";
-    if (entry) {
-      item.innerHTML = `
-        <span class="leaderboard-rank">#${index + 1}</span>
-        <span class="leaderboard-name">${entry.name}</span>
-        <span class="leaderboard-score">${entry.score}</span>
-      `;
-    } else {
-      item.innerHTML = `
-        <span class="leaderboard-rank">#${index + 1}</span>
-        <span class="leaderboard-name">Ledig plats</span>
-        <span class="leaderboard-score">-</span>
-      `;
-    }
-    leaderboardList.append(item);
+    leaderboardList.append(createLeaderboardRow(index, entry));
   }
+}
+
+function createLeaderboardRow(index, entry) {
+  const item = document.createElement("li");
+  const rank = document.createElement("span");
+  const name = document.createElement("span");
+  const score = document.createElement("span");
+
+  item.className = "leaderboard-item";
+  rank.className = "leaderboard-rank";
+  name.className = "leaderboard-name";
+  score.className = "leaderboard-score";
+
+  rank.textContent = `#${index + 1}`;
+  name.textContent = entry?.name || "Ledig plats";
+  score.textContent = entry ? String(entry.score) : "-";
+
+  item.append(rank, name, score);
+  return item;
 }
 
 function closeLeaderboardOverlay() {
@@ -778,20 +781,20 @@ function getHockeyLevelComment(goals) {
   if (goals >= 8) {
     return "Traffsakert!";
   }
+  if (goals === 6) {
+    return "Precis over gransen.";
+  }
   if (goals >= 6) {
     return "Snygga skott.";
+  }
+  if (goals === 5) {
+    return "1 traff ifran game over.";
   }
   if (goals >= 4) {
     return "Helt okej, Bosse.";
   }
   if (goals === 3) {
     return "Det dar klarade sig.";
-  }
-  if (goals === 6) {
-    return "Precis over gransen.";
-  }
-  if (goals === 5) {
-    return "1 traff ifran game over.";
   }
   return "Inte jattebra.";
 }
@@ -1295,6 +1298,17 @@ function beginHockeyCharge(pointerX = null, pointerY = null, pointerId = null) {
   state.hockey.dragPointerId = pointerId;
   state.hockey.dragStartX = pointerX ?? hockeyRink.x + hockeyRink.width / 2;
   state.hockey.dragStartY = pointerY ?? canvas.height - 38;
+}
+
+function getCanvasPointFromPointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
 }
 
 function updateHockeyCharge(pointerX, pointerY) {
@@ -3010,26 +3024,6 @@ function drawSigge(sigge) {
   ctx.restore();
 }
 
-function drawSmiley(smiley) {
-  ctx.save();
-  ctx.translate(smiley.x + smiley.width / 2, smiley.y + smiley.height / 2);
-  ctx.fillStyle = "#ffe052";
-  ctx.beginPath();
-  ctx.arc(0, 0, smiley.width / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#2c3b42";
-  ctx.beginPath();
-  ctx.arc(-6, -4, 2.4, 0, Math.PI * 2);
-  ctx.arc(6, -4, 2.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.lineWidth = 2.2;
-  ctx.strokeStyle = "#2c3b42";
-  ctx.beginPath();
-  ctx.arc(0, 2, 9, 0.2, Math.PI - 0.2);
-  ctx.stroke();
-  ctx.restore();
-}
-
 function frame(timestamp) {
   if (!state.lastTime) {
     state.lastTime = timestamp;
@@ -3127,8 +3121,9 @@ canvas.addEventListener("pointerdown", (event) => {
   }
 
   if (state.mode === "hockey") {
-    beginHockeyCharge(event.clientX, event.clientY, event.pointerId);
-    updateHockeyCharge(event.clientX, event.clientY);
+    const point = getCanvasPointFromPointer(event);
+    beginHockeyCharge(point.x, point.y, event.pointerId);
+    updateHockeyCharge(point.x, point.y);
     canvas.setPointerCapture(event.pointerId);
     return;
   }
@@ -3141,7 +3136,8 @@ canvas.addEventListener("pointermove", (event) => {
   if (state.mode !== "hockey" || state.hockey.dragPointerId !== event.pointerId) {
     return;
   }
-  updateHockeyCharge(event.clientX, event.clientY);
+  const point = getCanvasPointFromPointer(event);
+  updateHockeyCharge(point.x, point.y);
 });
 
 function endHockeyPointer(pointerId) {
