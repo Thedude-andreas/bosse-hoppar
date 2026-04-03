@@ -3915,23 +3915,43 @@ scoreCard.addEventListener("pointerup", () => {
   lastScoreTapAt = now;
 });
 
-runnerButton.addEventListener("click", () => {
+function bindPress(element, handler) {
+  let lastPointerUpAt = 0;
+
+  element.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    lastPointerUpAt = performance.now();
+    event.preventDefault();
+    handler(event);
+  });
+
+  element.addEventListener("click", (event) => {
+    if (performance.now() - lastPointerUpAt < 450) {
+      return;
+    }
+    handler(event);
+  });
+}
+
+bindPress(runnerButton, () => {
   void showLeaderboardForGame("runner");
 });
 
-mazeButton.addEventListener("click", () => {
+bindPress(mazeButton, () => {
   void showLeaderboardForGame("maze");
 });
 
-hockeyButton.addEventListener("click", () => {
+bindPress(hockeyButton, () => {
   void showLeaderboardForGame("hockey");
 });
 
-climbButton.addEventListener("click", () => {
+bindPress(climbButton, () => {
   void showLeaderboardForGame("climb");
 });
 
-leaderboardStart.addEventListener("click", () => {
+bindPress(leaderboardStart, () => {
   if (state.selectedGame === "maze") {
     startMazeGame();
   } else if (state.selectedGame === "hockey") {
@@ -3943,11 +3963,11 @@ leaderboardStart.addEventListener("click", () => {
   }
 });
 
-leaderboardBack.addEventListener("click", () => {
+bindPress(leaderboardBack, () => {
   showMenu();
 });
 
-restartButton.addEventListener("click", () => {
+bindPress(restartButton, () => {
   gameOverOverlay.classList.add("hidden");
   if (state.selectedGame === "maze") {
     if (restartButton.dataset.action === "maze-reset") {
@@ -3964,7 +3984,7 @@ restartButton.addEventListener("click", () => {
   }
 });
 
-menuButton.addEventListener("click", () => {
+bindPress(menuButton, () => {
   showMenu();
 });
 
@@ -3984,7 +4004,7 @@ nameEntryForm.addEventListener("submit", async (event) => {
   await showSavedLeaderboard(game, "Ditt resultat är sparat i topplistan.");
 });
 
-nameEntrySkip.addEventListener("click", async () => {
+bindPress(nameEntrySkip, async () => {
   if (!state.pendingScoreEntry) {
     return;
   }
@@ -4013,7 +4033,7 @@ cheatForm.addEventListener("submit", (event) => {
   closeCheatDialog();
 });
 
-cheatCancel.addEventListener("click", () => {
+bindPress(cheatCancel, () => {
   closeCheatDialog();
 });
 
