@@ -229,7 +229,9 @@ function createClimbState() {
     transitionTimer: 0,
     fireworks: [],
     bannerText: "",
-    joystickJumpCooldown: 0,
+    leftTapAt: 0,
+    dragStartX: 0,
+    pendingLowJumpTimer: null,
   };
 }
 
@@ -437,7 +439,12 @@ function loadNextClimbMountain(nextMountainIndex) {
   state.climb.transitionTimer = 0;
   state.climb.fireworks = [];
   state.climb.bannerText = "";
-  state.climb.joystickJumpCooldown = 0;
+  state.climb.leftTapAt = 0;
+  state.climb.dragStartX = 0;
+  if (state.climb.pendingLowJumpTimer !== null) {
+    clearTimeout(state.climb.pendingLowJumpTimer);
+  }
+  state.climb.pendingLowJumpTimer = null;
   state.climb.moveDir = 0;
   state.climb.touchMoveDir = 0;
   state.climb.pointerId = null;
@@ -854,6 +861,10 @@ function finishClimbAdventure() {
 function endGame(message) {
   state.running = false;
   state.gameOver = true;
+  if (state.mode === "climb" && state.climb.pendingLowJumpTimer !== null) {
+    clearTimeout(state.climb.pendingLowJumpTimer);
+    state.climb.pendingLowJumpTimer = null;
+  }
   persistBestScore();
   updateShellLayout();
   const game = state.selectedGame === "maze"
@@ -1282,7 +1293,7 @@ function updateMobileMode() {
   const landscapeMode = isTouchMobileMode() && inGame && isLandscapeMobileMode();
   document.body.classList.toggle("mobile-game", landscapeMode);
   document.body.classList.toggle("mobile-landscape", landscapeMode);
-  const showJoystick = landscapeMode && (state.mode === "maze" || state.mode === "climb");
+  const showJoystick = landscapeMode && state.mode === "maze";
   if (joystickLabel) {
     joystickLabel.textContent = state.mode === "climb"
       ? "Styr Bosse klättrar med höger tumme"
@@ -1857,9 +1868,6 @@ function updateHockey(delta) {
 
 function updateClimb(delta) {
   const climb = state.climb;
-  if (climb.joystickJumpCooldown > 0) {
-    climb.joystickJumpCooldown = Math.max(0, climb.joystickJumpCooldown - delta);
-  }
   if (climb.levelComplete) {
     updateClimbFireworks(climb, delta);
     climb.transitionTimer = Math.max(0, climb.transitionTimer - delta);
@@ -1948,6 +1956,10 @@ function updateClimb(delta) {
   }
 
   if (player.y <= climb.mountain.topGoalY) {
+    if (climb.pendingLowJumpTimer !== null) {
+      clearTimeout(climb.pendingLowJumpTimer);
+      climb.pendingLowJumpTimer = null;
+    }
     climb.levelComplete = true;
     climb.transitionTimer = 2500;
     climb.fireworks = createClimbFireworks(95);
@@ -1994,11 +2006,15 @@ function stepClimbPhysics(climb, player, moveDir, stepSeconds) {
 }
 
 function jumpClimb() {
+  jumpClimbWithVelocity(climbPhysics.jumpVelocity);
+}
+
+function jumpClimbWithVelocity(velocity) {
   if (state.mode !== "climb" || !state.running || state.gameOver) {
     return;
   }
   if (state.climb.player.onGround) {
-    state.climb.player.vy = climbPhysics.jumpVelocity;
+    state.climb.player.vy = velocity;
     state.climb.player.onGround = false;
   }
 }
@@ -3754,6 +3770,34 @@ canvas.addEventListener("pointerdown", (event) => {
   }
   if (state.mode === "climb") {
     if (isTouchMobileMode()) {
+      const point = getCanvasPointFromPointer(event);
+      if (point.x < canvas.width * 0.5) {
+        const now = performance.now();
+        const isDoubleTap = now - state.climb.leftTapAt < 320;
+        state.climb.leftTapAt = now;
+        if (isDoubleTap) {
+          if (state.climb.pendingLowJumpTimer !== null) {
+            clearTimeout(state.climb.pendingLowJumpTimer);
+            state.climb.pendingLowJumpTimer = null;
+          }
+          jumpClimbWithVelocity(climbPhysics.jumpVelocity);
+        } else {
+          if (state.climb.pendingLowJumpTimer !== null) {
+            clearTimeout(state.climb.pendingLowJumpTimer);
+          }
+          state.climb.pendingLowJumpTimer = setTimeout(() => {
+            jumpClimbWithVelocity(climbPhysics.jumpVelocity * 0.72);
+            state.climb.pendingLowJumpTimer = null;
+          }, 180);
+        }
+        return;
+      }
+      if (state.climb.pointerId === null) {
+        state.climb.pointerId = event.pointerId;
+        state.climb.dragStartX = point.x;
+        state.climb.touchMoveDir = 0;
+        canvas.setPointerCapture(event.pointerId);
+      }
       return;
     }
     const point = getCanvasPointFromPointer(event);
@@ -3773,6 +3817,13 @@ canvas.addEventListener("pointerdown", (event) => {
 canvas.addEventListener("pointermove", (event) => {
   if (state.mode === "climb" && state.climb.pointerId === event.pointerId) {
     if (isTouchMobileMode()) {
+      const point = getCanvasPointFromPointer(event);
+      const dx = point.x - state.climb.dragStartX;
+      if (Math.abs(dx) < 16) {
+        state.climb.touchMoveDir = 0;
+      } else {
+        state.climb.touchMoveDir = dx > 0 ? 1 : -1;
+      }
       return;
     }
     const point = getCanvasPointFromPointer(event);
@@ -3804,6 +3855,7 @@ function endClimbPointer(pointerId) {
     canvas.releasePointerCapture(pointerId);
   }
   state.climb.pointerId = null;
+  state.climb.dragStartX = 0;
   state.climb.touchMoveDir = 0;
 }
 
@@ -3944,7 +3996,7 @@ hockeyLevelOverlay.addEventListener("pointerdown", (event) => {
 });
 
 joystickBase.addEventListener("pointerdown", (event) => {
-  if (state.mode !== "maze" && state.mode !== "climb") {
+  if (state.mode !== "maze") {
     return;
   }
   event.preventDefault();
@@ -3966,9 +4018,6 @@ function releaseJoystick(pointerId) {
   joystickState.active = false;
   joystickState.pointerId = null;
   resetJoystick();
-  if (state.mode === "climb") {
-    state.climb.touchMoveDir = 0;
-  }
   if (pointerId !== null && joystickBase.hasPointerCapture(pointerId)) {
     joystickBase.releasePointerCapture(pointerId);
   }
@@ -3997,25 +4046,6 @@ function updateJoystickFromPoint(clientX, clientY) {
   const knobX = rawX * limited;
   const knobY = rawY * limited;
   joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-
-  if (state.mode === "climb") {
-    if (distance < 18) {
-      state.climb.touchMoveDir = 0;
-      return;
-    }
-
-    if (Math.abs(rawX) < 14) {
-      state.climb.touchMoveDir = 0;
-    } else {
-      state.climb.touchMoveDir = rawX > 0 ? 1 : -1;
-    }
-
-    if (rawY < -26 && state.climb.player.onGround && state.climb.joystickJumpCooldown === 0) {
-      jumpClimb();
-      state.climb.joystickJumpCooldown = 220;
-    }
-    return;
-  }
 
   if (distance < 18) {
     return;
