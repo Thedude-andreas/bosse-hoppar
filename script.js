@@ -2497,30 +2497,7 @@ function drawClimbEnemies() {
 function drawClimbEnemy(enemy) {
   const bob = Math.sin(enemy.bob) * 2;
   const y = enemy.y + bob;
-  ctx.save();
-  ctx.translate(enemy.x, y - enemy.height);
-  ctx.fillStyle = "#f6db55";
-  ctx.beginPath();
-  ctx.ellipse(17, 18, 15, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(11, 14, 8, 10, -0.25, 0, Math.PI * 2);
-  ctx.ellipse(23, 14, 8, 10, 0.25, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#232b34";
-  ctx.beginPath();
-  ctx.arc(19, 17, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#d5ad2d";
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(10, 27);
-  ctx.lineTo(10, 34);
-  ctx.moveTo(24, 27);
-  ctx.lineTo(24, 34);
-  ctx.stroke();
-  ctx.restore();
+  drawElephant(enemy.x - 2, y + 6, 42, 32, false);
 }
 
 function drawClimbPlayer() {
