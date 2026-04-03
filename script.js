@@ -120,6 +120,7 @@ const climbPhysics = {
   jumpVelocity: -760,
   substepMs: 1000 / 120,
 };
+const climbTapWindowMs = 320;
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
 let supabaseClient = null;
@@ -231,7 +232,7 @@ function createClimbState() {
     bannerText: "",
     leftTapAt: 0,
     dragStartX: 0,
-    pendingLowJumpTimer: null,
+    boostTapUntil: 0,
   };
 }
 
@@ -441,10 +442,7 @@ function loadNextClimbMountain(nextMountainIndex) {
   state.climb.bannerText = "";
   state.climb.leftTapAt = 0;
   state.climb.dragStartX = 0;
-  if (state.climb.pendingLowJumpTimer !== null) {
-    clearTimeout(state.climb.pendingLowJumpTimer);
-  }
-  state.climb.pendingLowJumpTimer = null;
+  state.climb.boostTapUntil = 0;
   state.climb.moveDir = 0;
   state.climb.touchMoveDir = 0;
   state.climb.pointerId = null;
@@ -861,9 +859,8 @@ function finishClimbAdventure() {
 function endGame(message) {
   state.running = false;
   state.gameOver = true;
-  if (state.mode === "climb" && state.climb.pendingLowJumpTimer !== null) {
-    clearTimeout(state.climb.pendingLowJumpTimer);
-    state.climb.pendingLowJumpTimer = null;
+  if (state.mode === "climb") {
+    state.climb.boostTapUntil = 0;
   }
   persistBestScore();
   updateShellLayout();
@@ -1956,10 +1953,7 @@ function updateClimb(delta) {
   }
 
   if (player.y <= climb.mountain.topGoalY) {
-    if (climb.pendingLowJumpTimer !== null) {
-      clearTimeout(climb.pendingLowJumpTimer);
-      climb.pendingLowJumpTimer = null;
-    }
+    climb.boostTapUntil = 0;
     climb.levelComplete = true;
     climb.transitionTimer = 2500;
     climb.fireworks = createClimbFireworks(95);
@@ -2017,6 +2011,30 @@ function jumpClimbWithVelocity(velocity) {
     state.climb.player.vy = velocity;
     state.climb.player.onGround = false;
   }
+}
+
+function triggerClimbTapJump() {
+  const now = performance.now();
+  const climb = state.climb;
+
+  if (
+    !climb.player.onGround &&
+    now <= climb.boostTapUntil &&
+    now - climb.leftTapAt < climbTapWindowMs
+  ) {
+    // Second tap while airborne gives a clear boost.
+    climb.player.vy = Math.min(climb.player.vy, climbPhysics.jumpVelocity);
+    climb.boostTapUntil = 0;
+    climb.leftTapAt = now;
+    return;
+  }
+
+  if (climb.player.onGround) {
+    jumpClimbWithVelocity(climbPhysics.jumpVelocity * 0.72);
+    climb.boostTapUntil = now + climbTapWindowMs;
+  }
+
+  climb.leftTapAt = now;
 }
 
 function setClimbMoveDirection(dir) {
@@ -3693,7 +3711,7 @@ document.addEventListener("keydown", (event) => {
     }
     if (event.code === "ArrowUp" || event.code === "KeyW" || event.code === "Space") {
       event.preventDefault();
-      jumpClimb();
+      triggerClimbTapJump();
       return;
     }
   }
@@ -3772,24 +3790,7 @@ canvas.addEventListener("pointerdown", (event) => {
     if (isTouchMobileMode()) {
       const point = getCanvasPointFromPointer(event);
       if (point.x < canvas.width * 0.5) {
-        const now = performance.now();
-        const isDoubleTap = now - state.climb.leftTapAt < 320;
-        state.climb.leftTapAt = now;
-        if (isDoubleTap) {
-          if (state.climb.pendingLowJumpTimer !== null) {
-            clearTimeout(state.climb.pendingLowJumpTimer);
-            state.climb.pendingLowJumpTimer = null;
-          }
-          jumpClimbWithVelocity(climbPhysics.jumpVelocity);
-        } else {
-          if (state.climb.pendingLowJumpTimer !== null) {
-            clearTimeout(state.climb.pendingLowJumpTimer);
-          }
-          state.climb.pendingLowJumpTimer = setTimeout(() => {
-            jumpClimbWithVelocity(climbPhysics.jumpVelocity * 0.72);
-            state.climb.pendingLowJumpTimer = null;
-          }, 180);
-        }
+        triggerClimbTapJump();
         return;
       }
       if (state.climb.pointerId === null) {
