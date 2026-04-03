@@ -37,6 +37,7 @@ const gameShell = document.getElementById("game-shell");
 const runnerButton = document.getElementById("runner-button");
 const mazeButton = document.getElementById("maze-button");
 const hockeyButton = document.getElementById("hockey-button");
+const climbButton = document.getElementById("climb-button");
 const restartButton = document.getElementById("restart-button");
 const menuButton = document.getElementById("menu-button");
 const joystick = document.getElementById("joystick");
@@ -57,11 +58,13 @@ const leaderboardStorageKeys = {
   runner: "bosse-hoppar-runner-scores",
   maze: "bosse-hoppar-maze-scores",
   hockey: "bosse-hoppar-hockey-scores",
+  climb: "bosse-hoppar-climb-scores",
 };
 const gameMeta = {
   runner: { key: "runner", label: "Bosse Hoppar" },
   maze: { key: "maze", label: "Bosse Vimsar" },
   hockey: { key: "hockey", label: "Bosse på is" },
+  climb: { key: "climb", label: "Bosse klättrar" },
 };
 const mazeCell = 40;
 const totalMazeLevels = 10;
@@ -105,6 +108,13 @@ const hockeyRink = {
   y: 72,
   width: 360,
   height: 320,
+};
+const climbWorld = {
+  width: canvas.width,
+  height: 2300,
+  floorSpacing: 132,
+  bottomY: 2140,
+  topGoalY: 140,
 };
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
@@ -152,6 +162,7 @@ const state = {
   sigges: [],
   maze: createMazeState(),
   hockey: createHockeyState(),
+  climb: createClimbState(),
 };
 
 bestScoreElement.textContent = "0";
@@ -191,6 +202,119 @@ function createHockeyState() {
       mood: "ready",
     },
   };
+}
+
+function createClimbState() {
+  const floors = createClimbFloors();
+  return {
+    cameraY: Math.max(0, climbWorld.height - canvas.height),
+    moveDir: 0,
+    touchMoveDir: 0,
+    pointerId: null,
+    highestY: climbWorld.bottomY,
+    floors,
+    carrots: createClimbCarrots(floors),
+    enemies: createClimbEnemies(floors),
+    player: {
+      x: canvas.width * 0.5 - 28,
+      y: climbWorld.bottomY,
+      width: 56,
+      height: 66,
+      vx: 0,
+      vy: 0,
+      onGround: true,
+      facing: 1,
+    },
+  };
+}
+
+function createClimbFloors() {
+  const floors = [];
+  const totalFloors = 15;
+
+  for (let floorIndex = 0; floorIndex < totalFloors; floorIndex += 1) {
+    const y = climbWorld.bottomY - floorIndex * climbWorld.floorSpacing;
+    if (floorIndex === 0) {
+      floors.push({
+        y,
+        segments: [{ x: 70, width: canvas.width - 140 }],
+      });
+      continue;
+    }
+
+    const gapWidth = 120 + (floorIndex % 3) * 18;
+    const minGapX = 110;
+    const maxGapX = canvas.width - gapWidth - 110;
+    const gapX = minGapX + ((floorIndex * 173) % Math.max(1, maxGapX - minGapX));
+
+    floors.push({
+      y,
+      segments: [
+        { x: 44, width: Math.max(90, gapX - 44) },
+        { x: gapX + gapWidth, width: Math.max(90, canvas.width - (gapX + gapWidth) - 44) },
+      ],
+    });
+  }
+
+  floors.push({
+    y: climbWorld.topGoalY,
+    segments: [{ x: 150, width: canvas.width - 300 }],
+    goal: true,
+  });
+
+  return floors;
+}
+
+function createClimbCarrots(floors) {
+  const carrots = [];
+
+  floors.forEach((floor, floorIndex) => {
+    if (floorIndex === 0 || floor.goal) {
+      return;
+    }
+    floor.segments.forEach((segment, segmentIndex) => {
+      if (segment.width < 120) {
+        return;
+      }
+      const placeCarrot = segmentIndex === 0 || (floorIndex + segmentIndex) % 2 === 0;
+      if (!placeCarrot) {
+        return;
+      }
+      carrots.push({
+        x: segment.x + segment.width * 0.5,
+        y: floor.y - 26,
+        collected: false,
+      });
+    });
+  });
+
+  return carrots;
+}
+
+function createClimbEnemies(floors) {
+  const enemies = [];
+
+  floors.forEach((floor, floorIndex) => {
+    if (floorIndex < 2 || floor.goal) {
+      return;
+    }
+    const longestSegment = [...floor.segments].sort((a, b) => b.width - a.width)[0];
+    if (!longestSegment || longestSegment.width < 170) {
+      return;
+    }
+    enemies.push({
+      x: longestSegment.x + 34 + (floorIndex % 3) * 22,
+      y: floor.y - 10,
+      width: 34,
+      height: 28,
+      minX: longestSegment.x + 18,
+      maxX: longestSegment.x + longestSegment.width - 18,
+      vx: floorIndex % 2 === 0 ? 1.2 : -1.2,
+      bob: Math.random() * Math.PI * 2,
+    });
+  });
+
+  return enemies;
 }
 
 function createMazeLevel(levelIndex) {
@@ -476,6 +600,19 @@ function startHockeyGame() {
   updateShellLayout();
 }
 
+function startClimbGame() {
+  requestGameFullscreen();
+  resetClimbState(true);
+  startOverlay.classList.add("hidden");
+  gameOverOverlay.classList.add("hidden");
+  closeHockeyLevelOverlay();
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
+  closeCheatDialog();
+  updateMobileMode();
+  updateShellLayout();
+}
+
 function loadMazeLevel(levelIndex, resetScore) {
   state.mode = "maze";
   state.selectedGame = "maze";
@@ -514,6 +651,21 @@ function resetHockeyState(resetScore) {
   scoreElement.textContent = String(state.score);
   totalScoreElement.textContent = String(state.score);
   closeHockeyLevelOverlay();
+  updateHud();
+}
+
+function resetClimbState(resetScore) {
+  state.mode = "climb";
+  state.selectedGame = "climb";
+  state.running = true;
+  state.gameOver = false;
+  state.lastTime = 0;
+  state.climb = createClimbState();
+  if (resetScore) {
+    state.score = 0;
+  }
+  scoreElement.textContent = String(state.score);
+  totalScoreElement.textContent = "0";
   updateHud();
 }
 
@@ -557,12 +709,31 @@ function finishMazeAdventure() {
   });
 }
 
+function finishClimbAdventure() {
+  state.running = false;
+  state.gameOver = true;
+  persistBestScore();
+  updateShellLayout();
+  void handleFinishedGame({
+    game: "climb",
+    score: state.score,
+    title: "Toppen nådd!",
+    message: `Bosse tog sig hela vägen upp och samlade ihop ${state.score} poäng.`,
+    restartLabel: "Klättra igen",
+    restartAction: "retry-current",
+  });
+}
+
 function endGame(message) {
   state.running = false;
   state.gameOver = true;
   persistBestScore();
   updateShellLayout();
-  const game = state.selectedGame === "maze" ? "maze" : "runner";
+  const game = state.selectedGame === "maze"
+    ? "maze"
+    : state.selectedGame === "climb"
+      ? "climb"
+      : "runner";
   void handleFinishedGame({
     game,
     score: state.score,
@@ -583,7 +754,7 @@ function persistBestScore() {
 function updateHud() {
   const isHockey = state.mode === "hockey";
   totalCardElement.classList.toggle("hidden", !isHockey);
-  levelCaptionElement.textContent = isHockey ? "Level" : "Spel";
+  levelCaptionElement.textContent = isHockey ? "Level" : state.mode === "climb" ? "Våning" : "Spel";
   scoreCaptionElement.textContent = isHockey ? "Skott" : "Poäng";
   bestCaptionElement.textContent = "Bästa";
   if (state.mode === "menu") {
@@ -601,6 +772,9 @@ function updateHud() {
     levelLabelElement.textContent = String(state.hockey.level);
     scoreElement.textContent = `${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel}`;
     totalScoreElement.textContent = String(state.score);
+  } else if (state.mode === "climb") {
+    const floorProgress = Math.max(1, Math.min(16, Math.round((climbWorld.bottomY - state.climb.player.y) / climbWorld.floorSpacing) + 1));
+    levelLabelElement.textContent = String(floorProgress);
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
@@ -1442,6 +1616,8 @@ function update(delta) {
 
   if (state.mode === "maze") {
     updateMaze(delta);
+  } else if (state.mode === "climb") {
+    updateClimb(delta);
   } else if (state.mode === "hockey") {
     updateHockey(delta);
   } else {
@@ -1543,6 +1719,127 @@ function updateHockey(delta) {
     }
     return shot.progress < 1 || !shot.resolved;
   });
+}
+
+function updateClimb(delta) {
+  const climb = state.climb;
+  const player = climb.player;
+  const frameScale = delta / (1000 / 60);
+  const moveDir = climb.touchMoveDir || climb.moveDir;
+  const horizontalSpeed = 4.1;
+
+  player.vx = moveDir * horizontalSpeed;
+  if (moveDir !== 0) {
+    player.facing = moveDir > 0 ? 1 : -1;
+  }
+
+  const previousY = player.y;
+  player.x += player.vx * frameScale;
+  player.vy += 0.56 * frameScale;
+  player.y += player.vy * frameScale;
+  player.onGround = false;
+
+  player.x = clamp(player.x, 18, canvas.width - player.width - 18);
+
+  for (const floor of climb.floors) {
+    const crossedFloor = previousY <= floor.y && player.y >= floor.y;
+    const standingCloseToFloor = previousY >= floor.y - 2 && previousY <= floor.y + 10 && player.y >= floor.y;
+    if ((crossedFloor || standingCloseToFloor) && player.vy >= 0) {
+      const feetLeft = player.x + 8;
+      const feetRight = player.x + player.width - 8;
+      const standingSegment = floor.segments.find((segment) =>
+        feetRight > segment.x && feetLeft < segment.x + segment.width
+      );
+      if (standingSegment) {
+        player.y = floor.y;
+        player.vy = 0;
+        player.onGround = true;
+        break;
+      }
+    }
+  }
+
+  if (player.y < climb.highestY) {
+    const gained = Math.floor((climb.highestY - player.y) / 30);
+    if (gained > 0) {
+      state.score += gained * 2;
+      climb.highestY = player.y;
+      scoreElement.textContent = String(state.score);
+      persistBestScore();
+      updateHud();
+    }
+  }
+
+  for (const carrot of climb.carrots) {
+    if (carrot.collected) {
+      continue;
+    }
+    if (
+      Math.abs((player.x + player.width * 0.5) - carrot.x) < 26 &&
+      Math.abs((player.y - player.height * 0.55) - carrot.y) < 24
+    ) {
+      carrot.collected = true;
+      state.score += 35;
+      scoreElement.textContent = String(state.score);
+      persistBestScore();
+    }
+  }
+
+  for (const enemy of climb.enemies) {
+    enemy.x += enemy.vx * frameScale;
+    enemy.bob += delta * 0.01;
+    if (enemy.x < enemy.minX || enemy.x > enemy.maxX - enemy.width) {
+      enemy.vx *= -1;
+      enemy.x = clamp(enemy.x, enemy.minX, enemy.maxX - enemy.width);
+    }
+
+    if (intersects(
+      {
+        x: player.x + 10,
+        y: player.y - player.height + 10,
+        width: player.width - 20,
+        height: player.height - 12,
+      },
+      {
+        x: enemy.x,
+        y: enemy.y - enemy.height,
+        width: enemy.width,
+        height: enemy.height,
+      }
+    )) {
+      endGame(`En fiende stoppade Bosse på väg upp. Du fick ${state.score} poäng.`);
+      return;
+    }
+  }
+
+  climb.cameraY = clamp(player.y - canvas.height * 0.58, 0, climbWorld.height - canvas.height);
+  updateHud();
+
+  if (player.y > climbWorld.height + 80) {
+    endGame(`Bosse tappade fotfästet och föll ner igen. Du fick ${state.score} poäng.`);
+    return;
+  }
+
+  if (player.y <= climbWorld.topGoalY) {
+    finishClimbAdventure();
+  }
+}
+
+function jumpClimb() {
+  if (state.mode !== "climb" || !state.running || state.gameOver) {
+    return;
+  }
+  if (state.climb.player.onGround) {
+    state.climb.player.vy = -12.9;
+    state.climb.player.onGround = false;
+  }
+}
+
+function setClimbMoveDirection(dir) {
+  if (state.mode !== "climb") {
+    return;
+  }
+  state.climb.moveDir = dir;
 }
 
 function updateRunner(delta) {
@@ -2091,11 +2388,133 @@ function intersects(a, b) {
 function draw() {
   if (state.mode === "maze") {
     drawMaze();
+  } else if (state.mode === "climb") {
+    drawClimb();
   } else if (state.mode === "hockey") {
     drawHockey();
   } else {
     drawRunner();
   }
+}
+
+function drawClimb() {
+  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, "#0c1f3b");
+  sky.addColorStop(0.45, "#224f7a");
+  sky.addColorStop(1, "#8fd0ff");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawClimbBackdrop();
+
+  ctx.save();
+  ctx.translate(0, -state.climb.cameraY);
+  drawClimbGoal();
+  drawClimbFloors();
+  drawClimbCarrots();
+  drawClimbEnemies();
+  drawClimbPlayer();
+  ctx.restore();
+
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = "700 21px 'Baloo 2'";
+  ctx.textAlign = "left";
+  ctx.fillText("Hoppa mellan våningarna, samla morötter och akta fienderna.", 28, 34);
+  ctx.fillText("Styr med piltangenter eller A/D. Hoppa med upp, W eller mellanslag.", 28, 58);
+}
+
+function drawClimbBackdrop() {
+  for (let index = 0; index < 8; index += 1) {
+    const x = 60 + index * 118;
+    const width = 56 + (index % 3) * 18;
+    const height = 160 + (index % 4) * 40;
+    ctx.fillStyle = `rgba(8, 25, 49, ${0.18 + (index % 3) * 0.05})`;
+    ctx.fillRect(x, canvas.height - height, width, height);
+  }
+}
+
+function drawClimbGoal() {
+  const topY = climbWorld.topGoalY - 78;
+  ctx.fillStyle = "#f1f7ff";
+  ctx.fillRect(canvas.width / 2 - 6, topY, 12, 92);
+  ctx.fillStyle = "#ff8c42";
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2 + 6, topY + 10);
+  ctx.lineTo(canvas.width / 2 + 74, topY + 28);
+  ctx.lineTo(canvas.width / 2 + 6, topY + 46);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawClimbFloors() {
+  for (const floor of state.climb.floors) {
+    for (const segment of floor.segments) {
+      const plank = ctx.createLinearGradient(segment.x, floor.y - 10, segment.x, floor.y + 10);
+      plank.addColorStop(0, floor.goal ? "#ffe6a3" : "#d8eef8");
+      plank.addColorStop(1, floor.goal ? "#ffb84d" : "#80b9d9");
+      ctx.fillStyle = plank;
+      roundRect(ctx, segment.x, floor.y - 10, segment.width, 18, 9);
+      ctx.fill();
+
+      ctx.fillStyle = floor.goal ? "#d27c1b" : "#477595";
+      for (let x = segment.x + 18; x < segment.x + segment.width - 10; x += 34) {
+        ctx.fillRect(x, floor.y - 5, 16, 4);
+      }
+    }
+  }
+}
+
+function drawClimbCarrots() {
+  for (const carrot of state.climb.carrots) {
+    if (carrot.collected) {
+      continue;
+    }
+    drawCarrotShape(carrot.x - 14, carrot.y - 10);
+  }
+}
+
+function drawClimbEnemies() {
+  for (const enemy of state.climb.enemies) {
+    drawClimbEnemy(enemy);
+  }
+}
+
+function drawClimbEnemy(enemy) {
+  const bob = Math.sin(enemy.bob) * 2;
+  const y = enemy.y + bob;
+  ctx.save();
+  ctx.translate(enemy.x, y - enemy.height);
+  ctx.fillStyle = "#f6db55";
+  ctx.beginPath();
+  ctx.ellipse(17, 18, 15, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(11, 14, 8, 10, -0.25, 0, Math.PI * 2);
+  ctx.ellipse(23, 14, 8, 10, 0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#232b34";
+  ctx.beginPath();
+  ctx.arc(19, 17, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#d5ad2d";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(10, 27);
+  ctx.lineTo(10, 34);
+  ctx.moveTo(24, 27);
+  ctx.lineTo(24, 34);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawClimbPlayer() {
+  const player = state.climb.player;
+  ctx.save();
+  ctx.translate(player.x + player.width / 2, player.y - player.height);
+  ctx.scale(0.68 * player.facing, 0.68);
+  drawBunnyShape(-41, 0, Math.min(0.3, Math.abs(player.vy) / 14));
+  ctx.restore();
 }
 
 function drawHockey() {
@@ -3069,6 +3488,24 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (state.mode === "climb") {
+    if (event.code === "ArrowLeft" || event.code === "KeyA") {
+      event.preventDefault();
+      setClimbMoveDirection(-1);
+      return;
+    }
+    if (event.code === "ArrowRight" || event.code === "KeyD") {
+      event.preventDefault();
+      setClimbMoveDirection(1);
+      return;
+    }
+    if (event.code === "ArrowUp" || event.code === "KeyW" || event.code === "Space") {
+      event.preventDefault();
+      jumpClimb();
+      return;
+    }
+  }
+
   if (handleMazeDirection(event.code)) {
     event.preventDefault();
     return;
@@ -3100,6 +3537,18 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keyup", (event) => {
+  if (state.mode === "climb") {
+    if ((event.code === "ArrowLeft" || event.code === "KeyA") && state.climb.moveDir < 0) {
+      event.preventDefault();
+      setClimbMoveDirection(0);
+      return;
+    }
+    if ((event.code === "ArrowRight" || event.code === "KeyD") && state.climb.moveDir > 0) {
+      event.preventDefault();
+      setClimbMoveDirection(0);
+      return;
+    }
+  }
   if (event.code === "ArrowDown" && state.mode === "hockey") {
     event.preventDefault();
     releaseHockeyShot();
@@ -3127,12 +3576,27 @@ canvas.addEventListener("pointerdown", (event) => {
     canvas.setPointerCapture(event.pointerId);
     return;
   }
+  if (state.mode === "climb") {
+    const point = getCanvasPointFromPointer(event);
+    state.climb.pointerId = event.pointerId;
+    canvas.setPointerCapture(event.pointerId);
+    if (point.y < canvas.height * 0.62) {
+      jumpClimb();
+    }
+    state.climb.touchMoveDir = point.x < canvas.width * 0.5 ? -1 : 1;
+    return;
+  }
   if (state.mode === "runner") {
     handleRunnerJump();
   }
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  if (state.mode === "climb" && state.climb.pointerId === event.pointerId) {
+    const point = getCanvasPointFromPointer(event);
+    state.climb.touchMoveDir = point.x < canvas.width * 0.5 ? -1 : 1;
+    return;
+  }
   if (state.mode !== "hockey" || state.hockey.dragPointerId !== event.pointerId) {
     return;
   }
@@ -3150,11 +3614,24 @@ function endHockeyPointer(pointerId) {
   releaseHockeyShot();
 }
 
+function endClimbPointer(pointerId) {
+  if (state.mode !== "climb" || state.climb.pointerId !== pointerId) {
+    return;
+  }
+  if (canvas.hasPointerCapture(pointerId)) {
+    canvas.releasePointerCapture(pointerId);
+  }
+  state.climb.pointerId = null;
+  state.climb.touchMoveDir = 0;
+}
+
 canvas.addEventListener("pointerup", (event) => {
+  endClimbPointer(event.pointerId);
   endHockeyPointer(event.pointerId);
 });
 
 canvas.addEventListener("pointercancel", (event) => {
+  endClimbPointer(event.pointerId);
   endHockeyPointer(event.pointerId);
 });
 
@@ -3183,11 +3660,17 @@ hockeyButton.addEventListener("click", () => {
   void showLeaderboardForGame("hockey");
 });
 
+climbButton.addEventListener("click", () => {
+  void showLeaderboardForGame("climb");
+});
+
 leaderboardStart.addEventListener("click", () => {
   if (state.selectedGame === "maze") {
     startMazeGame();
   } else if (state.selectedGame === "hockey") {
     startHockeyGame();
+  } else if (state.selectedGame === "climb") {
+    startClimbGame();
   } else {
     startRunnerGame();
   }
@@ -3207,6 +3690,8 @@ restartButton.addEventListener("click", () => {
     }
   } else if (state.selectedGame === "hockey") {
     startHockeyGame();
+  } else if (state.selectedGame === "climb") {
+    startClimbGame();
   } else {
     startRunnerGame();
   }
