@@ -114,7 +114,7 @@ const climbWorld = {
   height: 2300,
   floorSpacing: 132,
   bottomY: 2140,
-  topGoalY: 140,
+  topGoalY: 160,
 };
 const climbPhysics = {
   moveSpeed: 245,
