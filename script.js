@@ -116,6 +116,12 @@ const climbWorld = {
   bottomY: 2140,
   topGoalY: 140,
 };
+const climbPhysics = {
+  moveSpeed: 245,
+  gravity: 2050,
+  jumpVelocity: -760,
+  substepMs: 1000 / 120,
+};
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
 let supabaseClient = null;
@@ -1724,38 +1730,14 @@ function updateHockey(delta) {
 function updateClimb(delta) {
   const climb = state.climb;
   const player = climb.player;
-  const frameScale = delta / (1000 / 60);
   const moveDir = climb.touchMoveDir || climb.moveDir;
-  const horizontalSpeed = 4.1;
+  const substepCount = Math.max(1, Math.ceil(delta / climbPhysics.substepMs));
+  const stepSeconds = (delta / substepCount) / 1000;
 
-  player.vx = moveDir * horizontalSpeed;
-  if (moveDir !== 0) {
-    player.facing = moveDir > 0 ? 1 : -1;
-  }
-
-  const previousY = player.y;
-  player.x += player.vx * frameScale;
-  player.vy += 0.56 * frameScale;
-  player.y += player.vy * frameScale;
-  player.onGround = false;
-
-  player.x = clamp(player.x, 18, canvas.width - player.width - 18);
-
-  for (const floor of climb.floors) {
-    const crossedFloor = previousY <= floor.y && player.y >= floor.y;
-    const standingCloseToFloor = previousY >= floor.y - 2 && previousY <= floor.y + 10 && player.y >= floor.y;
-    if ((crossedFloor || standingCloseToFloor) && player.vy >= 0) {
-      const feetLeft = player.x + 8;
-      const feetRight = player.x + player.width - 8;
-      const standingSegment = floor.segments.find((segment) =>
-        feetRight > segment.x && feetLeft < segment.x + segment.width
-      );
-      if (standingSegment) {
-        player.y = floor.y;
-        player.vy = 0;
-        player.onGround = true;
-        break;
-      }
+  for (let step = 0; step < substepCount; step += 1) {
+    stepClimbPhysics(climb, player, moveDir, stepSeconds);
+    if (state.gameOver || !state.running) {
+      return;
     }
   }
 
@@ -1786,7 +1768,7 @@ function updateClimb(delta) {
   }
 
   for (const enemy of climb.enemies) {
-    enemy.x += enemy.vx * frameScale;
+    enemy.x += enemy.vx * stepSeconds * 60;
     enemy.bob += delta * 0.01;
     if (enemy.x < enemy.minX || enemy.x > enemy.maxX - enemy.width) {
       enemy.vx *= -1;
@@ -1825,12 +1807,45 @@ function updateClimb(delta) {
   }
 }
 
+function stepClimbPhysics(climb, player, moveDir, stepSeconds) {
+  player.vx = moveDir * climbPhysics.moveSpeed;
+  if (moveDir !== 0) {
+    player.facing = moveDir > 0 ? 1 : -1;
+  }
+
+  const previousY = player.y;
+  player.x += player.vx * stepSeconds;
+  player.vy += climbPhysics.gravity * stepSeconds;
+  player.y += player.vy * stepSeconds;
+  player.onGround = false;
+
+  player.x = clamp(player.x, 18, canvas.width - player.width - 18);
+
+  for (const floor of climb.floors) {
+    const crossedFloor = previousY <= floor.y && player.y >= floor.y;
+    const standingCloseToFloor = previousY >= floor.y - 2 && previousY <= floor.y + 10 && player.y >= floor.y;
+    if ((crossedFloor || standingCloseToFloor) && player.vy >= 0) {
+      const feetLeft = player.x + 8;
+      const feetRight = player.x + player.width - 8;
+      const standingSegment = floor.segments.find((segment) =>
+        feetRight > segment.x && feetLeft < segment.x + segment.width
+      );
+      if (standingSegment) {
+        player.y = floor.y;
+        player.vy = 0;
+        player.onGround = true;
+        break;
+      }
+    }
+  }
+}
+
 function jumpClimb() {
   if (state.mode !== "climb" || !state.running || state.gameOver) {
     return;
   }
   if (state.climb.player.onGround) {
-    state.climb.player.vy = -12.9;
+    state.climb.player.vy = climbPhysics.jumpVelocity;
     state.climb.player.onGround = false;
   }
 }
