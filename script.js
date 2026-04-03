@@ -109,13 +109,10 @@ const hockeyRink = {
   width: 360,
   height: 320,
 };
-const climbWorld = {
-  width: canvas.width,
-  height: 2300,
-  floorSpacing: 132,
-  bottomY: 2140,
-  topGoalY: 160,
-};
+const totalClimbMountains = 10;
+const climbBaseFloorSpacing = 132;
+const climbTopPadding = 170;
+const climbBottomPadding = 180;
 const climbPhysics = {
   moveSpeed: 245,
   gravity: 2050,
@@ -211,19 +208,91 @@ function createHockeyState() {
 }
 
 function createClimbState() {
-  const floors = createClimbFloors();
+  const mountainIndex = 0;
+  const mountain = createClimbMountainConfig(mountainIndex);
+  const mountainData = createClimbMountainData(mountain);
   return {
-    cameraY: Math.max(0, climbWorld.height - canvas.height),
+    mountainIndex,
+    totalMountains: totalClimbMountains,
+    mountain,
+    cameraY: mountainData.cameraY,
     moveDir: 0,
     touchMoveDir: 0,
     pointerId: null,
-    highestY: climbWorld.bottomY,
+    highestY: mountainData.highestY,
+    floors: mountainData.floors,
+    carrots: mountainData.carrots,
+    enemies: mountainData.enemies,
+    player: mountainData.player,
+    levelComplete: false,
+    transitionTimer: 0,
+    fireworks: [],
+    bannerText: "",
+  };
+}
+
+function getClimbPalette(mountainIndex) {
+  const base = {
+    skyTop: "#0c1f3b",
+    skyMid: "#224f7a",
+    skyBottom: "#8fd0ff",
+    skyline: "rgba(8, 25, 49, 0.24)",
+    platformTop: "#d8eef8",
+    platformBottom: "#80b9d9",
+    platformStripe: "#477595",
+    goalTop: "#ffe6a3",
+    goalBottom: "#ffb84d",
+    goalStripe: "#d27c1b",
+  };
+
+  if (mountainIndex < 2) {
+    return base;
+  }
+
+  const variants = [
+    { skyTop: "#1f1b49", skyMid: "#4340a3", skyBottom: "#8ec5ff", skyline: "rgba(18, 13, 59, 0.24)", platformTop: "#ece5ff", platformBottom: "#ab9de8", platformStripe: "#5d5497", goalTop: "#ffe6a3", goalBottom: "#ffb84d", goalStripe: "#d27c1b" },
+    { skyTop: "#193321", skyMid: "#2f7450", skyBottom: "#9fe1b0", skyline: "rgba(9, 46, 28, 0.25)", platformTop: "#dff7e5", platformBottom: "#85cf9a", platformStripe: "#3f8864", goalTop: "#fff0a7", goalBottom: "#f6c451", goalStripe: "#aa7a1a" },
+    { skyTop: "#3a1d16", skyMid: "#a04e2e", skyBottom: "#ffd198", skyline: "rgba(64, 24, 11, 0.24)", platformTop: "#ffe8d5", platformBottom: "#f0b78a", platformStripe: "#9c633e", goalTop: "#fff1b8", goalBottom: "#ffc15e", goalStripe: "#b9801f" },
+    { skyTop: "#10243f", skyMid: "#2f6297", skyBottom: "#95e8ff", skyline: "rgba(8, 29, 56, 0.24)", platformTop: "#daf2ff", platformBottom: "#8ec5f2", platformStripe: "#4b789f", goalTop: "#fff2ba", goalBottom: "#ffcc72", goalStripe: "#c1872d" },
+    { skyTop: "#3b1c2f", skyMid: "#924a7a", skyBottom: "#ffb9d8", skyline: "rgba(61, 16, 45, 0.22)", platformTop: "#ffe1f1", platformBottom: "#e8a2cb", platformStripe: "#975c82", goalTop: "#fff1b5", goalBottom: "#ffca69", goalStripe: "#b77f22" },
+    { skyTop: "#20233f", skyMid: "#4f66c8", skyBottom: "#c7d5ff", skyline: "rgba(20, 26, 58, 0.22)", platformTop: "#eaeeff", platformBottom: "#a9bbea", platformStripe: "#5e6ea9", goalTop: "#fff2ba", goalBottom: "#ffcb6e", goalStripe: "#b98726" },
+    { skyTop: "#2c2b14", skyMid: "#7d7530", skyBottom: "#efe79f", skyline: "rgba(44, 39, 8, 0.2)", platformTop: "#f9f6d5", platformBottom: "#c8be72", platformStripe: "#7a733f", goalTop: "#fff3bc", goalBottom: "#ffd073", goalStripe: "#ba8a2b" },
+    { skyTop: "#1a1a1a", skyMid: "#4b4b4b", skyBottom: "#d8d8d8", skyline: "rgba(15, 15, 15, 0.2)", platformTop: "#f4f4f4", platformBottom: "#bbbbbb", platformStripe: "#6e6e6e", goalTop: "#fff0b7", goalBottom: "#ffc964", goalStripe: "#ae7e20" },
+  ];
+
+  return variants[(mountainIndex - 2) % variants.length];
+}
+
+function createClimbMountainConfig(mountainIndex) {
+  const floorCount = 15 + mountainIndex * 2;
+  const floorSpacing = climbBaseFloorSpacing;
+  const topGoalY = climbTopPadding;
+  const bottomY = topGoalY + floorCount * floorSpacing;
+  const height = bottomY + climbBottomPadding;
+  return {
+    index: mountainIndex,
+    floorCount,
+    floorSpacing,
+    topGoalY,
+    bottomY,
+    height,
+    carrotScale: 1 + mountainIndex * 0.1,
+    carrotPoints: 35 + mountainIndex * 10,
+    palette: getClimbPalette(mountainIndex),
+  };
+}
+
+function createClimbMountainData(mountain) {
+  const floors = createClimbFloors(mountain);
+  return {
+    cameraY: Math.max(0, mountain.height - canvas.height),
+    highestY: mountain.bottomY,
     floors,
-    carrots: createClimbCarrots(floors),
-    enemies: createClimbEnemies(floors),
+    carrots: createClimbCarrots(floors, mountain),
+    enemies: createClimbEnemies(floors, mountain),
     player: {
       x: canvas.width * 0.5 - 28,
-      y: climbWorld.bottomY,
+      y: mountain.bottomY,
       width: 56,
       height: 66,
       vx: 0,
@@ -234,12 +303,11 @@ function createClimbState() {
   };
 }
 
-function createClimbFloors() {
+function createClimbFloors(mountain) {
   const floors = [];
-  const totalFloors = 15;
 
-  for (let floorIndex = 0; floorIndex < totalFloors; floorIndex += 1) {
-    const y = climbWorld.bottomY - floorIndex * climbWorld.floorSpacing;
+  for (let floorIndex = 0; floorIndex < mountain.floorCount; floorIndex += 1) {
+    const y = mountain.bottomY - floorIndex * mountain.floorSpacing;
     if (floorIndex === 0) {
       floors.push({
         y,
@@ -263,7 +331,7 @@ function createClimbFloors() {
   }
 
   floors.push({
-    y: climbWorld.topGoalY,
+    y: mountain.topGoalY,
     segments: [{ x: 150, width: canvas.width - 300 }],
     goal: true,
   });
@@ -271,7 +339,7 @@ function createClimbFloors() {
   return floors;
 }
 
-function createClimbCarrots(floors) {
+function createClimbCarrots(floors, mountain) {
   const carrots = [];
 
   floors.forEach((floor, floorIndex) => {
@@ -289,6 +357,7 @@ function createClimbCarrots(floors) {
       carrots.push({
         x: segment.x + segment.width * 0.5,
         y: floor.y - 26,
+        scale: mountain.carrotScale,
         collected: false,
       });
     });
@@ -297,7 +366,7 @@ function createClimbCarrots(floors) {
   return carrots;
 }
 
-function createClimbEnemies(floors) {
+function createClimbEnemies(floors, mountain) {
   const enemies = [];
 
   floors.forEach((floor, floorIndex) => {
@@ -315,12 +384,61 @@ function createClimbEnemies(floors) {
       height: 28,
       minX: longestSegment.x + 18,
       maxX: longestSegment.x + longestSegment.width - 18,
-      vx: floorIndex % 2 === 0 ? 1.2 : -1.2,
+      vx: floorIndex % 2 === 0 ? (1.2 + mountain.index * 0.06) : (-1.2 - mountain.index * 0.06),
       bob: Math.random() * Math.PI * 2,
     });
   });
 
   return enemies;
+}
+
+function createClimbFireworks(count = 70) {
+  const colors = ["#ffd84d", "#ff8c42", "#7ed7ff", "#ff6f91", "#7ddf6f", "#fff6c4"];
+  return Array.from({ length: count }, (_, index) => ({
+    x: 120 + Math.random() * (canvas.width - 240),
+    y: 70 + Math.random() * 120,
+    vx: (Math.random() - 0.5) * 8,
+    vy: -2.5 - Math.random() * 4,
+    size: 3 + Math.random() * 4,
+    rotation: Math.random() * Math.PI,
+    spin: (Math.random() - 0.5) * 0.2,
+    color: colors[index % colors.length],
+    life: 900 + Math.random() * 1000,
+  }));
+}
+
+function updateClimbFireworks(climb, delta) {
+  for (const piece of climb.fireworks) {
+    if (piece.life <= 0) {
+      continue;
+    }
+    piece.life = Math.max(0, piece.life - delta);
+    piece.x += piece.vx;
+    piece.y += piece.vy;
+    piece.vy += 0.18;
+    piece.rotation += piece.spin;
+  }
+}
+
+function loadNextClimbMountain(nextMountainIndex) {
+  const mountain = createClimbMountainConfig(nextMountainIndex);
+  const mountainData = createClimbMountainData(mountain);
+  state.climb.mountainIndex = nextMountainIndex;
+  state.climb.mountain = mountain;
+  state.climb.cameraY = mountainData.cameraY;
+  state.climb.highestY = mountainData.highestY;
+  state.climb.floors = mountainData.floors;
+  state.climb.carrots = mountainData.carrots;
+  state.climb.enemies = mountainData.enemies;
+  state.climb.player = mountainData.player;
+  state.climb.levelComplete = false;
+  state.climb.transitionTimer = 0;
+  state.climb.fireworks = [];
+  state.climb.bannerText = "";
+  state.climb.moveDir = 0;
+  state.climb.touchMoveDir = 0;
+  state.climb.pointerId = null;
+  updateHud();
 }
 
 function createMazeLevel(levelIndex) {
@@ -723,8 +841,8 @@ function finishClimbAdventure() {
   void handleFinishedGame({
     game: "climb",
     score: state.score,
-    title: "Toppen nådd!",
-    message: `Bosse tog sig hela vägen upp och samlade ihop ${state.score} poäng.`,
+    title: "Alla berg klara!",
+    message: `Bosse klarade 10 berg och samlade ihop ${state.score} poäng.`,
     restartLabel: "Klättra igen",
     restartAction: "retry-current",
   });
@@ -760,7 +878,7 @@ function persistBestScore() {
 function updateHud() {
   const isHockey = state.mode === "hockey";
   totalCardElement.classList.toggle("hidden", !isHockey);
-  levelCaptionElement.textContent = isHockey ? "Level" : state.mode === "climb" ? "Våning" : "Spel";
+  levelCaptionElement.textContent = isHockey ? "Level" : state.mode === "climb" ? "Berg" : "Spel";
   scoreCaptionElement.textContent = isHockey ? "Skott" : "Poäng";
   bestCaptionElement.textContent = "Bästa";
   if (state.mode === "menu") {
@@ -779,8 +897,7 @@ function updateHud() {
     scoreElement.textContent = `${state.hockey.goalsThisLevel}/${state.hockey.shotsTakenLevel}`;
     totalScoreElement.textContent = String(state.score);
   } else if (state.mode === "climb") {
-    const floorProgress = Math.max(1, Math.min(16, Math.round((climbWorld.bottomY - state.climb.player.y) / climbWorld.floorSpacing) + 1));
-    levelLabelElement.textContent = String(floorProgress);
+    levelLabelElement.textContent = `${state.climb.mountainIndex + 1}/${state.climb.totalMountains}`;
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
@@ -1729,6 +1846,19 @@ function updateHockey(delta) {
 
 function updateClimb(delta) {
   const climb = state.climb;
+  if (climb.levelComplete) {
+    updateClimbFireworks(climb, delta);
+    climb.transitionTimer = Math.max(0, climb.transitionTimer - delta);
+    if (climb.transitionTimer === 0) {
+      if (climb.mountainIndex + 1 >= climb.totalMountains) {
+        finishClimbAdventure();
+      } else {
+        loadNextClimbMountain(climb.mountainIndex + 1);
+      }
+    }
+    return;
+  }
+
   const player = climb.player;
   const moveDir = climb.touchMoveDir || climb.moveDir;
   const substepCount = Math.max(1, Math.ceil(delta / climbPhysics.substepMs));
@@ -1756,12 +1886,13 @@ function updateClimb(delta) {
     if (carrot.collected) {
       continue;
     }
+    const carrotScale = carrot.scale || 1;
     if (
-      Math.abs((player.x + player.width * 0.5) - carrot.x) < 26 &&
-      Math.abs((player.y - player.height * 0.55) - carrot.y) < 24
+      Math.abs((player.x + player.width * 0.5) - carrot.x) < 26 * carrotScale &&
+      Math.abs((player.y - player.height * 0.55) - carrot.y) < 24 * carrotScale
     ) {
       carrot.collected = true;
-      state.score += 35;
+      state.score += climb.mountain.carrotPoints;
       scoreElement.textContent = String(state.score);
       persistBestScore();
     }
@@ -1794,16 +1925,24 @@ function updateClimb(delta) {
     }
   }
 
-  climb.cameraY = clamp(player.y - canvas.height * 0.58, 0, climbWorld.height - canvas.height);
+  climb.cameraY = clamp(player.y - canvas.height * 0.58, 0, climb.mountain.height - canvas.height);
   updateHud();
 
-  if (player.y > climbWorld.height + 80) {
+  if (player.y > climb.mountain.height + 80) {
     endGame(`Bosse tappade fotfästet och föll ner igen. Du fick ${state.score} poäng.`);
     return;
   }
 
-  if (player.y <= climbWorld.topGoalY) {
-    finishClimbAdventure();
+  if (player.y <= climb.mountain.topGoalY) {
+    climb.levelComplete = true;
+    climb.transitionTimer = 2500;
+    climb.fireworks = createClimbFireworks(95);
+    climb.bannerText = climb.mountainIndex + 1 >= climb.totalMountains
+      ? "Alla berg klara!"
+      : `Berg ${climb.mountainIndex + 1} klart!`;
+    climb.moveDir = 0;
+    climb.touchMoveDir = 0;
+    climb.pointerId = null;
   }
 }
 
@@ -2413,46 +2552,57 @@ function draw() {
 }
 
 function drawClimb() {
+  const climb = state.climb;
+  const palette = climb.mountain.palette;
   const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#0c1f3b");
-  sky.addColorStop(0.45, "#224f7a");
-  sky.addColorStop(1, "#8fd0ff");
+  sky.addColorStop(0, palette.skyTop);
+  sky.addColorStop(0.45, palette.skyMid);
+  sky.addColorStop(1, palette.skyBottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawClimbBackdrop();
+  drawClimbBackdrop(palette);
 
   ctx.save();
-  ctx.translate(0, -state.climb.cameraY);
-  drawClimbGoal();
-  drawClimbFloors();
+  ctx.translate(0, -climb.cameraY);
+  drawClimbGoal(climb.mountain, palette);
+  drawClimbFloors(climb.floors, palette);
   drawClimbCarrots();
   drawClimbEnemies();
   drawClimbPlayer();
   ctx.restore();
 
+  drawClimbFireworks(climb.fireworks);
+
   ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.font = "700 21px 'Baloo 2'";
   ctx.textAlign = "left";
-  ctx.fillText("Hoppa mellan våningarna, samla morötter och akta fienderna.", 28, 34);
-  ctx.fillText("Styr med piltangenter eller A/D. Hoppa med upp, W eller mellanslag.", 28, 58);
+  if (climb.levelComplete) {
+    ctx.fillText(climb.bannerText, 28, 34);
+    if (climb.mountainIndex + 1 < climb.totalMountains) {
+      ctx.fillText(`Nästa berg: ${climb.mountainIndex + 2}/${climb.totalMountains}`, 28, 58);
+    }
+  } else {
+    ctx.fillText(`Berg ${climb.mountainIndex + 1}/${climb.totalMountains} · Morot +${climb.mountain.carrotPoints}`, 28, 34);
+    ctx.fillText("Styr med piltangenter eller A/D. Hoppa med upp, W eller mellanslag.", 28, 58);
+  }
 }
 
-function drawClimbBackdrop() {
+function drawClimbBackdrop(palette) {
   for (let index = 0; index < 8; index += 1) {
     const x = 60 + index * 118;
     const width = 56 + (index % 3) * 18;
     const height = 160 + (index % 4) * 40;
-    ctx.fillStyle = `rgba(8, 25, 49, ${0.18 + (index % 3) * 0.05})`;
+    ctx.fillStyle = palette.skyline;
     ctx.fillRect(x, canvas.height - height, width, height);
   }
 }
 
-function drawClimbGoal() {
-  const topY = climbWorld.topGoalY - 78;
+function drawClimbGoal(mountain, palette) {
+  const topY = mountain.topGoalY - 78;
   ctx.fillStyle = "#f1f7ff";
   ctx.fillRect(canvas.width / 2 - 6, topY, 12, 92);
-  ctx.fillStyle = "#ff8c42";
+  ctx.fillStyle = palette.goalBottom;
   ctx.beginPath();
   ctx.moveTo(canvas.width / 2 + 6, topY + 10);
   ctx.lineTo(canvas.width / 2 + 74, topY + 28);
@@ -2461,17 +2611,17 @@ function drawClimbGoal() {
   ctx.fill();
 }
 
-function drawClimbFloors() {
-  for (const floor of state.climb.floors) {
+function drawClimbFloors(floors, palette) {
+  for (const floor of floors) {
     for (const segment of floor.segments) {
       const plank = ctx.createLinearGradient(segment.x, floor.y - 10, segment.x, floor.y + 10);
-      plank.addColorStop(0, floor.goal ? "#ffe6a3" : "#d8eef8");
-      plank.addColorStop(1, floor.goal ? "#ffb84d" : "#80b9d9");
+      plank.addColorStop(0, floor.goal ? palette.goalTop : palette.platformTop);
+      plank.addColorStop(1, floor.goal ? palette.goalBottom : palette.platformBottom);
       ctx.fillStyle = plank;
       roundRect(ctx, segment.x, floor.y - 10, segment.width, 18, 9);
       ctx.fill();
 
-      ctx.fillStyle = floor.goal ? "#d27c1b" : "#477595";
+      ctx.fillStyle = floor.goal ? palette.goalStripe : palette.platformStripe;
       for (let x = segment.x + 18; x < segment.x + segment.width - 10; x += 34) {
         ctx.fillRect(x, floor.y - 5, 16, 4);
       }
@@ -2484,7 +2634,12 @@ function drawClimbCarrots() {
     if (carrot.collected) {
       continue;
     }
-    drawCarrotShape(carrot.x - 14, carrot.y - 10);
+    const size = carrot.scale || 1;
+    ctx.save();
+    ctx.translate(carrot.x, carrot.y);
+    ctx.scale(size, size);
+    drawCarrotShape(-14, -10);
+    ctx.restore();
   }
 }
 
@@ -2507,6 +2662,21 @@ function drawClimbPlayer() {
   ctx.scale(0.68 * player.facing, 0.68);
   drawBunnyShape(-41, 0, Math.min(0.3, Math.abs(player.vy) / 14));
   ctx.restore();
+}
+
+function drawClimbFireworks(fireworks) {
+  for (const piece of fireworks) {
+    if (piece.life <= 0) {
+      continue;
+    }
+    ctx.save();
+    ctx.translate(piece.x, piece.y);
+    ctx.rotate(piece.rotation);
+    ctx.globalAlpha = Math.min(1, piece.life / 600);
+    ctx.fillStyle = piece.color;
+    ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size * 0.65);
+    ctx.restore();
+  }
 }
 
 function drawHockey() {
