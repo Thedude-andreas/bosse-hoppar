@@ -43,6 +43,7 @@ const menuButton = document.getElementById("menu-button");
 const joystick = document.getElementById("joystick");
 const joystickBase = document.getElementById("joystick-base");
 const joystickKnob = document.getElementById("joystick-knob");
+const joystickLabel = document.getElementById("joystick-label");
 
 const groundY = 330;
 const gravity = 0.72;
@@ -228,6 +229,7 @@ function createClimbState() {
     transitionTimer: 0,
     fireworks: [],
     bannerText: "",
+    joystickJumpCooldown: 0,
   };
 }
 
@@ -435,6 +437,7 @@ function loadNextClimbMountain(nextMountainIndex) {
   state.climb.transitionTimer = 0;
   state.climb.fireworks = [];
   state.climb.bannerText = "";
+  state.climb.joystickJumpCooldown = 0;
   state.climb.moveDir = 0;
   state.climb.touchMoveDir = 0;
   state.climb.pointerId = null;
@@ -1279,7 +1282,15 @@ function updateMobileMode() {
   const landscapeMode = isTouchMobileMode() && inGame && isLandscapeMobileMode();
   document.body.classList.toggle("mobile-game", landscapeMode);
   document.body.classList.toggle("mobile-landscape", landscapeMode);
-  const showJoystick = landscapeMode && state.mode === "maze";
+  const showJoystick = landscapeMode && (state.mode === "maze" || state.mode === "climb");
+  if (joystickLabel) {
+    joystickLabel.textContent = state.mode === "climb"
+      ? "Styr Bosse klättrar med höger tumme"
+      : "Styr Bosse Vimsar med höger tumme";
+  }
+  if (!showJoystick && state.mode === "climb") {
+    state.climb.touchMoveDir = 0;
+  }
   joystick.classList.toggle("hidden", !showJoystick);
   joystick.setAttribute("aria-hidden", String(!showJoystick));
 }
@@ -1846,6 +1857,9 @@ function updateHockey(delta) {
 
 function updateClimb(delta) {
   const climb = state.climb;
+  if (climb.joystickJumpCooldown > 0) {
+    climb.joystickJumpCooldown = Math.max(0, climb.joystickJumpCooldown - delta);
+  }
   if (climb.levelComplete) {
     updateClimbFireworks(climb, delta);
     climb.transitionTimer = Math.max(0, climb.transitionTimer - delta);
@@ -3739,6 +3753,9 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
   if (state.mode === "climb") {
+    if (isTouchMobileMode()) {
+      return;
+    }
     const point = getCanvasPointFromPointer(event);
     state.climb.pointerId = event.pointerId;
     canvas.setPointerCapture(event.pointerId);
@@ -3755,6 +3772,9 @@ canvas.addEventListener("pointerdown", (event) => {
 
 canvas.addEventListener("pointermove", (event) => {
   if (state.mode === "climb" && state.climb.pointerId === event.pointerId) {
+    if (isTouchMobileMode()) {
+      return;
+    }
     const point = getCanvasPointFromPointer(event);
     state.climb.touchMoveDir = point.x < canvas.width * 0.5 ? -1 : 1;
     return;
@@ -3924,7 +3944,7 @@ hockeyLevelOverlay.addEventListener("pointerdown", (event) => {
 });
 
 joystickBase.addEventListener("pointerdown", (event) => {
-  if (state.mode !== "maze") {
+  if (state.mode !== "maze" && state.mode !== "climb") {
     return;
   }
   event.preventDefault();
@@ -3946,6 +3966,9 @@ function releaseJoystick(pointerId) {
   joystickState.active = false;
   joystickState.pointerId = null;
   resetJoystick();
+  if (state.mode === "climb") {
+    state.climb.touchMoveDir = 0;
+  }
   if (pointerId !== null && joystickBase.hasPointerCapture(pointerId)) {
     joystickBase.releasePointerCapture(pointerId);
   }
@@ -3974,6 +3997,25 @@ function updateJoystickFromPoint(clientX, clientY) {
   const knobX = rawX * limited;
   const knobY = rawY * limited;
   joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+
+  if (state.mode === "climb") {
+    if (distance < 18) {
+      state.climb.touchMoveDir = 0;
+      return;
+    }
+
+    if (Math.abs(rawX) < 14) {
+      state.climb.touchMoveDir = 0;
+    } else {
+      state.climb.touchMoveDir = rawX > 0 ? 1 : -1;
+    }
+
+    if (rawY < -26 && state.climb.player.onGround && state.climb.joystickJumpCooldown === 0) {
+      jumpClimb();
+      state.climb.joystickJumpCooldown = 220;
+    }
+    return;
+  }
 
   if (distance < 18) {
     return;
