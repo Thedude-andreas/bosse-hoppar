@@ -13,6 +13,12 @@ set -a
 source "$ENV_FILE"
 set +a
 
+remote_root="${DEPLOY_PATH:-}"
+
+if [[ -z "$remote_root" || "$remote_root" == "." ]]; then
+  remote_root="webroots/www"
+fi
+
 local_files=(
   "index.html"
   "style.css"
@@ -26,7 +32,7 @@ local_dirs=(
 
 lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
 set sftp:auto-confirm yes
-cd "$DEPLOY_PATH"
+cd "$remote_root"
 mkdir -p bosse-hoppar
 cd bosse-hoppar
 rm -f index.html style.css script.js supabase-config.js
@@ -38,7 +44,7 @@ for file in "${local_files[@]}"; do
   if [[ -f "$file" ]]; then
     lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
 set sftp:auto-confirm yes
-cd "$DEPLOY_PATH/bosse-hoppar"
+cd "$remote_root/bosse-hoppar"
 put "$file"
 bye
 EOF
@@ -49,7 +55,7 @@ for dir in "${local_dirs[@]}"; do
   if [[ -d "$dir" ]]; then
     lftp -u "$DEPLOY_USER","$DEPLOY_PASS" -p "$DEPLOY_PORT" "sftp://$DEPLOY_HOST" <<EOF
 set sftp:auto-confirm yes
-cd "$DEPLOY_PATH/bosse-hoppar"
+cd "$remote_root/bosse-hoppar"
 mirror -R --delete --verbose \
   --exclude-glob .DS_Store \
   "$dir" "$dir"
