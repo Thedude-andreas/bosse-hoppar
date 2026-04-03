@@ -298,6 +298,7 @@ function createClimbMountainData(mountain) {
     player: {
       x: canvas.width * 0.5 - 28,
       y: mountain.bottomY,
+      previousY: mountain.bottomY,
       width: 56,
       height: 66,
       vx: 0,
@@ -391,6 +392,7 @@ function createClimbEnemies(floors, mountain) {
       maxX: longestSegment.x + longestSegment.width - 18,
       vx: floorIndex % 2 === 0 ? (1.2 + mountain.index * 0.06) : (-1.2 - mountain.index * 0.06),
       bob: Math.random() * Math.PI * 2,
+      stomped: false,
     });
   });
 
@@ -1918,6 +1920,10 @@ function updateClimb(delta) {
   }
 
   for (const enemy of climb.enemies) {
+    if (enemy.stomped) {
+      continue;
+    }
+
     enemy.x += enemy.vx * stepSeconds * 60;
     enemy.bob += delta * 0.01;
     if (enemy.x < enemy.minX || enemy.x > enemy.maxX - enemy.width) {
@@ -1925,20 +1931,42 @@ function updateClimb(delta) {
       enemy.x = clamp(enemy.x, enemy.minX, enemy.maxX - enemy.width);
     }
 
-    if (intersects(
-      {
-        x: player.x + 10,
-        y: player.y - player.height + 10,
-        width: player.width - 20,
-        height: player.height - 12,
-      },
-      {
-        x: enemy.x,
-        y: enemy.y - enemy.height,
-        width: enemy.width,
-        height: enemy.height,
+    const playerHitbox = {
+      x: player.x + 10,
+      y: player.y - player.height + 10,
+      width: player.width - 20,
+      height: player.height - 12,
+    };
+    const enemyHitbox = {
+      x: enemy.x,
+      y: enemy.y - enemy.height,
+      width: enemy.width,
+      height: enemy.height,
+    };
+
+    if (intersects(playerHitbox, enemyHitbox)) {
+      const previousFeetY = player.previousY;
+      const playerFeetY = player.y;
+      const enemyTopY = enemy.y - enemy.height;
+      const stompedEnemy =
+        player.vy > 0 &&
+        previousFeetY <= enemyTopY + 10 &&
+        playerFeetY >= enemyTopY - 2;
+
+      if (stompedEnemy) {
+        enemy.stomped = true;
+        player.y = enemyTopY;
+        player.previousY = enemyTopY;
+        player.vy = climbPhysics.jumpVelocity * 0.62;
+        player.onGround = false;
+        climb.boostTapUntil = 0;
+        state.score += 50 + climb.mountainIndex * 10;
+        scoreElement.textContent = String(state.score);
+        persistBestScore();
+        updateHud();
+        continue;
       }
-    )) {
+
       endGame(`En fiende stoppade Bosse på väg upp. Du fick ${state.score} poäng.`);
       return;
     }
@@ -1973,6 +2001,7 @@ function stepClimbPhysics(climb, player, moveDir, stepSeconds) {
   }
 
   const previousY = player.y;
+  player.previousY = previousY;
   player.x += player.vx * stepSeconds;
   player.vy += climbPhysics.gravity * stepSeconds;
   player.y += player.vy * stepSeconds;
@@ -2693,6 +2722,9 @@ function drawClimbCarrots() {
 
 function drawClimbEnemies() {
   for (const enemy of state.climb.enemies) {
+    if (enemy.stomped) {
+      continue;
+    }
     drawClimbEnemy(enemy);
   }
 }
