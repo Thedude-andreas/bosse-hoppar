@@ -38,6 +38,7 @@ const runnerButton = document.getElementById("runner-button");
 const mazeButton = document.getElementById("maze-button");
 const hockeyButton = document.getElementById("hockey-button");
 const climbButton = document.getElementById("climb-button");
+const cockpitButton = document.getElementById("cockpit-button");
 const restartButton = document.getElementById("restart-button");
 const menuButton = document.getElementById("menu-button");
 const joystick = document.getElementById("joystick");
@@ -60,12 +61,14 @@ const leaderboardStorageKeys = {
   maze: "bosse-hoppar-maze-scores",
   hockey: "bosse-hoppar-hockey-scores",
   climb: "bosse-hoppar-climb-scores",
+  cockpit: "bosse-hoppar-cockpit-scores",
 };
 const gameMeta = {
   runner: { key: "runner", label: "Bosse Hoppar" },
   maze: { key: "maze", label: "Bosse Vimsar" },
   hockey: { key: "hockey", label: "Bosse på is" },
   climb: { key: "climb", label: "Bosse klättrar" },
+  cockpit: { key: "cockpit", label: "Bosse i cockpiten" },
 };
 const mazeCell = 40;
 const totalMazeLevels = 10;
@@ -121,6 +124,16 @@ const climbPhysics = {
   substepMs: 1000 / 120,
 };
 const climbTapWindowMs = 320;
+const cockpitPhysics = {
+  gravity: 0.27,
+  flapVelocity: -6.45,
+  maxFallVelocity: 7.8,
+  scrollSpeed: 5.2,
+  obstacleWidth: 104,
+  obstacleInterval: 1280,
+  gapHeight: 144,
+  carrotPoints: 12,
+};
 let lastScoreTapAt = 0;
 let cheatResumeRunning = false;
 let supabaseClient = null;
@@ -168,6 +181,7 @@ const state = {
   maze: createMazeState(),
   hockey: createHockeyState(),
   climb: createClimbState(),
+  cockpit: createCockpitState(),
 };
 
 bestScoreElement.textContent = "0";
@@ -233,6 +247,24 @@ function createClimbState() {
     leftTapAt: 0,
     dragStartX: 0,
     boostTapUntil: 0,
+  };
+}
+
+function createCockpitState() {
+  return {
+    plane: {
+      x: 214,
+      y: canvas.height * 0.5,
+      width: 154,
+      height: 82,
+      velocityY: 0,
+      tilt: 0,
+      propellerAngle: 0,
+    },
+    obstacles: [],
+    spawnTimer: 900,
+    backgroundOffset: 0,
+    distance: 0,
   };
 }
 
@@ -838,6 +870,19 @@ function startClimbGame() {
   updateShellLayout();
 }
 
+function startCockpitGame() {
+  requestGameFullscreen();
+  resetCockpitState(true);
+  startOverlay.classList.add("hidden");
+  gameOverOverlay.classList.add("hidden");
+  closeHockeyLevelOverlay();
+  closeLeaderboardOverlay();
+  closeNameEntryOverlay();
+  closeCheatDialog();
+  updateMobileMode();
+  updateShellLayout();
+}
+
 function loadMazeLevel(levelIndex, resetScore) {
   state.mode = "maze";
   state.selectedGame = "maze";
@@ -886,6 +931,21 @@ function resetClimbState(resetScore) {
   state.gameOver = false;
   state.lastTime = 0;
   state.climb = createClimbState();
+  if (resetScore) {
+    state.score = 0;
+  }
+  scoreElement.textContent = String(state.score);
+  totalScoreElement.textContent = "0";
+  updateHud();
+}
+
+function resetCockpitState(resetScore) {
+  state.mode = "cockpit";
+  state.selectedGame = "cockpit";
+  state.running = true;
+  state.gameOver = false;
+  state.lastTime = 0;
+  state.cockpit = createCockpitState();
   if (resetScore) {
     state.score = 0;
   }
@@ -961,6 +1021,8 @@ function endGame(message) {
     ? "maze"
     : state.selectedGame === "climb"
       ? "climb"
+      : state.selectedGame === "cockpit"
+        ? "cockpit"
       : "runner";
   void handleFinishedGame({
     game,
@@ -1002,6 +1064,8 @@ function updateHud() {
     totalScoreElement.textContent = String(state.score);
   } else if (state.mode === "climb") {
     levelLabelElement.textContent = `${state.climb.mountainIndex + 1}/${state.climb.totalMountains}`;
+  } else if (state.mode === "cockpit") {
+    levelLabelElement.textContent = "Cockpiten";
   } else {
     levelLabelElement.textContent = "Hoppar";
   }
@@ -1556,6 +1620,15 @@ function jump() {
   }
 }
 
+function flapCockpit() {
+  if (!state.running || state.gameOver || state.mode !== "cockpit") {
+    return;
+  }
+  const plane = state.cockpit.plane;
+  plane.velocityY = cockpitPhysics.flapVelocity;
+  plane.tilt = -0.22;
+}
+
 function handleMazeDirection(code) {
   const dir = directions[code];
   if (!dir || state.mode !== "maze" || !state.running) {
@@ -1572,6 +1645,46 @@ function handleRunnerJump() {
     startRunnerGame();
   }
   jump();
+}
+
+function createCockpitObstacle() {
+  const difficulty = Math.min(28, Math.floor(state.score / 24) * 4);
+  const gapHeight = cockpitPhysics.gapHeight - difficulty;
+  const gapY = 54 + Math.random() * Math.max(40, canvas.height - gapHeight - 108);
+  const width = cockpitPhysics.obstacleWidth;
+  const x = canvas.width + 120;
+  const carrots = [];
+  const centerY = gapY + gapHeight * 0.5;
+  const carrotCount = Math.random() > 0.72 ? 2 : 1;
+
+  for (let index = 0; index < carrotCount; index += 1) {
+    carrots.push({
+      x: x + width * (0.42 + index * 0.28),
+      y: centerY + (index === 0 ? -18 : 22),
+      bob: Math.random() * Math.PI * 2,
+      rotor: Math.random() * Math.PI * 2,
+      collected: false,
+    });
+  }
+
+  return {
+    x,
+    width,
+    gapY,
+    gapHeight,
+    passed: false,
+    carrots,
+  };
+}
+
+function getCockpitPlaneHitbox() {
+  const plane = state.cockpit.plane;
+  return {
+    x: plane.x - 48,
+    y: plane.y - 22,
+    width: 98,
+    height: 44,
+  };
 }
 
 function getHockeyGoalBounds() {
@@ -1855,9 +1968,91 @@ function update(delta) {
     updateClimb(delta);
   } else if (state.mode === "hockey") {
     updateHockey(delta);
+  } else if (state.mode === "cockpit") {
+    updateCockpit(delta);
   } else {
     updateRunner(delta);
   }
+}
+
+function updateCockpit(delta) {
+  const cockpit = state.cockpit;
+  const plane = cockpit.plane;
+  const frameScale = delta / (1000 / 60);
+  const speed = cockpitPhysics.scrollSpeed + Math.min(2.2, cockpit.distance * 0.00005);
+  cockpit.distance += delta * speed * 0.06;
+  cockpit.backgroundOffset = (cockpit.backgroundOffset + speed * 0.55 * frameScale) % (canvas.width + 180);
+
+  cockpit.spawnTimer -= delta;
+  if (cockpit.spawnTimer <= 0) {
+    cockpit.obstacles.push(createCockpitObstacle());
+    cockpit.spawnTimer += Math.max(900, cockpitPhysics.obstacleInterval - cockpit.distance * 0.4);
+  }
+
+  plane.velocityY = Math.min(cockpitPhysics.maxFallVelocity, plane.velocityY + cockpitPhysics.gravity * frameScale);
+  plane.y += plane.velocityY * frameScale;
+  plane.tilt = lerp(plane.tilt, clamp(plane.velocityY * 0.04, -0.26, 0.38), 0.14);
+  plane.propellerAngle += 0.45 * frameScale;
+
+  const planeHitbox = getCockpitPlaneHitbox();
+  if (planeHitbox.y < 18 || planeHitbox.y + planeHitbox.height > canvas.height - 18) {
+    endGame(`Bosse tappade höjd i cockpiten. Du fick ${state.score} poäng.`);
+    return;
+  }
+
+  for (const obstacle of cockpit.obstacles) {
+    obstacle.x -= speed * frameScale;
+
+    for (const carrot of obstacle.carrots) {
+      if (carrot.collected) {
+        continue;
+      }
+      carrot.x -= speed * frameScale;
+      carrot.bob += delta * 0.008;
+      carrot.rotor += delta * 0.02;
+      const carrotHitbox = {
+        x: carrot.x - 18,
+        y: carrot.y - 26 + Math.sin(carrot.bob) * 4,
+        width: 36,
+        height: 40,
+      };
+      if (intersects(planeHitbox, carrotHitbox)) {
+        carrot.collected = true;
+        state.score += cockpitPhysics.carrotPoints;
+        scoreElement.textContent = String(state.score);
+        persistBestScore();
+        updateHud();
+      }
+    }
+
+    const topHitbox = {
+      x: obstacle.x + 8,
+      y: -24,
+      width: obstacle.width - 16,
+      height: obstacle.gapY + 24,
+    };
+    const bottomHitbox = {
+      x: obstacle.x + 8,
+      y: obstacle.gapY + obstacle.gapHeight,
+      width: obstacle.width - 16,
+      height: canvas.height - (obstacle.gapY + obstacle.gapHeight) + 24,
+    };
+
+    if (intersects(planeHitbox, topHitbox) || intersects(planeHitbox, bottomHitbox)) {
+      endGame(`Bosse flög rakt in i ett moln. Du fick ${state.score} poäng.`);
+      return;
+    }
+
+    if (!obstacle.passed && obstacle.x + obstacle.width < plane.x - 28) {
+      obstacle.passed = true;
+      state.score += 4;
+      scoreElement.textContent = String(state.score);
+      persistBestScore();
+      updateHud();
+    }
+  }
+
+  cockpit.obstacles = cockpit.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -160);
 }
 
 function updateHockeyFireworks(delta) {
@@ -2710,6 +2905,8 @@ function intersects(a, b) {
 function draw() {
   if (state.mode === "maze") {
     drawMaze();
+  } else if (state.mode === "cockpit") {
+    drawCockpit();
   } else if (state.mode === "climb") {
     drawClimb();
   } else if (state.mode === "hockey") {
@@ -2717,6 +2914,179 @@ function draw() {
   } else {
     drawRunner();
   }
+}
+
+function drawCockpit() {
+  const cockpit = state.cockpit;
+  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, "#08304b");
+  sky.addColorStop(0.5, "#3c90c7");
+  sky.addColorStop(1, "#d7f5ff");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "rgba(255, 244, 168, 0.92)";
+  ctx.beginPath();
+  ctx.arc(812, 76, 34, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (let index = 0; index < 7; index += 1) {
+    const x = ((index * 190) - cockpit.backgroundOffset) % (canvas.width + 180);
+    drawCloud((x + canvas.width + 180) % (canvas.width + 180) - 110, 64 + (index % 3) * 38, 0.88 + (index % 2) * 0.18);
+  }
+
+  ctx.fillStyle = "rgba(12, 58, 91, 0.24)";
+  for (let index = 0; index < 6; index += 1) {
+    const ridgeX = index * 175 - 20;
+    ctx.beginPath();
+    ctx.moveTo(ridgeX, canvas.height);
+    ctx.lineTo(ridgeX + 58, canvas.height - 92 - (index % 2) * 20);
+    ctx.lineTo(ridgeX + 150, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  for (const obstacle of cockpit.obstacles) {
+    drawCockpitCloudColumn(obstacle.x, -24, obstacle.width, obstacle.gapY + 34, true);
+    drawCockpitCloudColumn(
+      obstacle.x,
+      obstacle.gapY + obstacle.gapHeight - 10,
+      obstacle.width,
+      canvas.height - (obstacle.gapY + obstacle.gapHeight) + 34,
+      false
+    );
+    for (const carrot of obstacle.carrots) {
+      if (!carrot.collected) {
+        drawCockpitCarrot(carrot);
+      }
+    }
+  }
+
+  drawCockpitPlane(cockpit.plane);
+
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.font = "700 21px 'Baloo 2'";
+  ctx.textAlign = "left";
+  ctx.fillText("Tryck för att stiga snabbt. Släpp för att sjunka. Undvik moln och ta rotor-morötter.", 28, 36);
+}
+
+function drawCockpitCloudColumn(x, y, width, height, topColumn) {
+  const body = ctx.createLinearGradient(x, y, x, y + height);
+  body.addColorStop(0, "rgba(255,255,255,0.95)");
+  body.addColorStop(1, "rgba(213,236,250,0.95)");
+  ctx.fillStyle = body;
+  roundRect(ctx, x + 14, y, width - 28, height, 26);
+  ctx.fill();
+
+  const puffY = topColumn ? y + height - 6 : y + 6;
+  const puffOffset = topColumn ? -1 : 1;
+  for (let index = 0; index < 4; index += 1) {
+    const cx = x + 18 + index * (width - 36) / 3;
+    ctx.beginPath();
+    ctx.arc(cx, puffY + puffOffset * (index % 2) * 8, 26 + (index % 2) * 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "rgba(180, 214, 233, 0.42)";
+  ctx.fillRect(x + 24, y + 18, width - 48, Math.max(18, height - 36));
+}
+
+function drawCockpitPlane(plane) {
+  ctx.save();
+  ctx.translate(plane.x, plane.y);
+  ctx.rotate(plane.tilt);
+
+  ctx.fillStyle = "#f46433";
+  ctx.beginPath();
+  ctx.moveTo(-56, -10);
+  ctx.quadraticCurveTo(-10, -30, 58, -10);
+  ctx.quadraticCurveTo(70, -3, 72, 8);
+  ctx.quadraticCurveTo(64, 22, 26, 24);
+  ctx.lineTo(-42, 24);
+  ctx.quadraticCurveTo(-68, 16, -66, 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#f9b03b";
+  ctx.beginPath();
+  ctx.moveTo(-4, 0);
+  ctx.lineTo(34, 20);
+  ctx.lineTo(-20, 18);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(-34, -6);
+  ctx.lineTo(-58, -26);
+  ctx.lineTo(-44, -6);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#de4e24";
+  ctx.beginPath();
+  ctx.moveTo(-48, 2);
+  ctx.lineTo(-76, 18);
+  ctx.lineTo(-52, 20);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#dff5ff";
+  ctx.beginPath();
+  ctx.ellipse(-6, -8, 24, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(-24, -30);
+  ctx.scale(0.44, 0.44);
+  drawBunnyShape(0, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = "#1f3549";
+  ctx.beginPath();
+  ctx.arc(69, 3, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#eef6ff";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  for (let blade = 0; blade < 3; blade += 1) {
+    const angle = plane.propellerAngle + (Math.PI * 2 * blade) / 3;
+    ctx.beginPath();
+    ctx.moveTo(69, 3);
+    ctx.lineTo(69 + Math.cos(angle) * 20, 3 + Math.sin(angle) * 20);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawCockpitCarrot(carrot) {
+  const bobY = Math.sin(carrot.bob) * 4;
+  ctx.save();
+  ctx.translate(carrot.x, carrot.y + bobY);
+
+  ctx.strokeStyle = "#30485d";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, -32);
+  ctx.lineTo(0, -18);
+  ctx.stroke();
+
+  const rotorPhase = (Math.sin(carrot.rotor) + 1) * 0.5;
+  const bladeHalfWidth = 4 + rotorPhase * 16;
+  const bladeThickness = 2.5 + (1 - rotorPhase) * 1.5;
+
+  ctx.fillStyle = "#eff8ff";
+  roundRect(ctx, -bladeHalfWidth, -35 - bladeThickness * 0.5, bladeHalfWidth * 2, bladeThickness, bladeThickness * 0.5);
+  ctx.fill();
+
+  ctx.fillStyle = "#d7e7f3";
+  ctx.beginPath();
+  ctx.arc(0, -32, 4.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawCarrotShape(-14, -10);
+  ctx.restore();
 }
 
 function drawClimb() {
@@ -3913,6 +4283,12 @@ document.addEventListener("keydown", (event) => {
     }
   }
 
+  if (state.mode === "cockpit" && (event.code === "ArrowUp" || event.code === "KeyW" || event.code === "Space")) {
+    event.preventDefault();
+    flapCockpit();
+    return;
+  }
+
   if (handleMazeDirection(event.code)) {
     event.preventDefault();
     return;
@@ -4005,6 +4381,10 @@ canvas.addEventListener("pointerdown", (event) => {
       jumpClimb();
     }
     state.climb.touchMoveDir = point.x < canvas.width * 0.5 ? -1 : 1;
+    return;
+  }
+  if (state.mode === "cockpit") {
+    flapCockpit();
     return;
   }
   if (state.mode === "runner") {
@@ -4116,6 +4496,10 @@ bindPress(climbButton, () => {
   void showLeaderboardForGame("climb");
 });
 
+bindPress(cockpitButton, () => {
+  void showLeaderboardForGame("cockpit");
+});
+
 bindPress(leaderboardStart, () => {
   if (state.selectedGame === "maze") {
     startMazeGame();
@@ -4123,6 +4507,8 @@ bindPress(leaderboardStart, () => {
     startHockeyGame();
   } else if (state.selectedGame === "climb") {
     startClimbGame();
+  } else if (state.selectedGame === "cockpit") {
+    startCockpitGame();
   } else {
     startRunnerGame();
   }
@@ -4144,6 +4530,8 @@ bindPress(restartButton, () => {
     startHockeyGame();
   } else if (state.selectedGame === "climb") {
     startClimbGame();
+  } else if (state.selectedGame === "cockpit") {
+    startCockpitGame();
   } else {
     startRunnerGame();
   }
