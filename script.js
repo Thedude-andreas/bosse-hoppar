@@ -268,12 +268,110 @@ function getClimbPalette(mountainIndex) {
   return variants[(mountainIndex - 2) % variants.length];
 }
 
+function getClimbArchitecture(mountainIndex) {
+  const architectures = [
+    { type: "classic", backdrop: "slabs", goalWidth: 320, goalX: 150 },
+    { type: "switchbacks", backdrop: "peaks", goalWidth: 260, goalX: 180 },
+    { type: "twinSpines", backdrop: "towers", goalWidth: 240, goalX: 210 },
+    { type: "brokenSteps", backdrop: "arches", goalWidth: 300, goalX: 160 },
+    { type: "spine", backdrop: "cliffs", goalWidth: 220, goalX: 250 },
+    { type: "bridges", backdrop: "crags", goalWidth: 280, goalX: 180 },
+  ];
+
+  return architectures[mountainIndex % architectures.length];
+}
+
+function buildClimbSegmentsForFloor(mountain, floorIndex) {
+  const safeMargin = 44;
+  const innerWidth = canvas.width - safeMargin * 2;
+  const pattern = mountain.architecture.type;
+
+  if (pattern === "switchbacks") {
+    const preferLeft = floorIndex % 2 === 0;
+    const mainWidth = 260 + (floorIndex % 3) * 24;
+    const anchorX = preferLeft ? safeMargin : canvas.width - safeMargin - mainWidth;
+    const segments = [{ x: anchorX, width: mainWidth }];
+    if (floorIndex % 3 === 0) {
+      const pocketWidth = 118;
+      const pocketX = preferLeft ? canvas.width - safeMargin - pocketWidth : safeMargin;
+      segments.push({ x: pocketX, width: pocketWidth });
+    }
+    return segments.sort((a, b) => a.x - b.x);
+  }
+
+  if (pattern === "twinSpines") {
+    const outerWidth = 176 + (floorIndex % 2) * 18;
+    const segments = [
+      { x: safeMargin, width: outerWidth },
+      { x: canvas.width - safeMargin - outerWidth, width: outerWidth },
+    ];
+    if (floorIndex % 3 !== 1) {
+      const centerWidth = 122 + (floorIndex % 3) * 16;
+      segments.push({ x: canvas.width * 0.5 - centerWidth * 0.5, width: centerWidth });
+    }
+    return segments.sort((a, b) => a.x - b.x);
+  }
+
+  if (pattern === "brokenSteps") {
+    const laneCount = 4;
+    const laneWidth = innerWidth / laneCount;
+    const stepLane = floorIndex % laneCount;
+    const mainWidth = 190 + ((floorIndex + mountain.index) % 2) * 34;
+    const mainX = safeMargin + stepLane * laneWidth + (laneWidth - mainWidth) * 0.5;
+    const segments = [{ x: mainX, width: mainWidth }];
+    if (floorIndex % 2 === 0) {
+      const supportWidth = 112;
+      const supportLane = (stepLane + 2) % laneCount;
+      const supportX = safeMargin + supportLane * laneWidth + (laneWidth - supportWidth) * 0.5;
+      segments.push({ x: supportX, width: supportWidth });
+    }
+    return segments.sort((a, b) => a.x - b.x);
+  }
+
+  if (pattern === "spine") {
+    const centerWidth = 150 + (floorIndex % 2) * 16;
+    const offset = ((floorIndex % 4) - 1.5) * 34;
+    const centerX = canvas.width * 0.5 - centerWidth * 0.5 + offset;
+    const segments = [{ x: centerX, width: centerWidth }];
+    const sideWidth = 116;
+    if (floorIndex % 2 === 0) {
+      segments.push({ x: safeMargin, width: sideWidth });
+    } else {
+      segments.push({ x: canvas.width - safeMargin - sideWidth, width: sideWidth });
+    }
+    return segments.sort((a, b) => a.x - b.x);
+  }
+
+  if (pattern === "bridges") {
+    const leftWidth = 168 + (floorIndex % 3) * 18;
+    const middleWidth = 120 + ((floorIndex + 1) % 3) * 14;
+    const rightWidth = 180 + ((floorIndex + 2) % 3) * 16;
+    const drift = ((floorIndex % 5) - 2) * 12;
+    return [
+      { x: safeMargin, width: leftWidth },
+      { x: canvas.width * 0.5 - middleWidth * 0.5 + drift, width: middleWidth },
+      { x: canvas.width - safeMargin - rightWidth, width: rightWidth },
+    ].sort((a, b) => a.x - b.x);
+  }
+
+  const gapWidth = 120 + (floorIndex % 3) * 18;
+  const minGapX = 110;
+  const maxGapX = canvas.width - gapWidth - 110;
+  const gapX = minGapX + ((floorIndex * 173) % Math.max(1, maxGapX - minGapX));
+
+  return [
+    { x: safeMargin, width: Math.max(90, gapX - safeMargin) },
+    { x: gapX + gapWidth, width: Math.max(90, canvas.width - (gapX + gapWidth) - safeMargin) },
+  ];
+}
+
 function createClimbMountainConfig(mountainIndex) {
   const floorCount = 15 + mountainIndex * 2;
   const floorSpacing = climbBaseFloorSpacing;
   const topGoalY = climbTopPadding;
   const bottomY = topGoalY + floorCount * floorSpacing;
   const height = bottomY + climbBottomPadding;
+  const architecture = getClimbArchitecture(mountainIndex);
   return {
     index: mountainIndex,
     floorCount,
@@ -284,6 +382,7 @@ function createClimbMountainConfig(mountainIndex) {
     carrotScale: 1 + mountainIndex * 0.1,
     carrotPoints: 35 + mountainIndex * 10,
     palette: getClimbPalette(mountainIndex),
+    architecture,
   };
 }
 
@@ -322,23 +421,15 @@ function createClimbFloors(mountain) {
       continue;
     }
 
-    const gapWidth = 120 + (floorIndex % 3) * 18;
-    const minGapX = 110;
-    const maxGapX = canvas.width - gapWidth - 110;
-    const gapX = minGapX + ((floorIndex * 173) % Math.max(1, maxGapX - minGapX));
-
     floors.push({
       y,
-      segments: [
-        { x: 44, width: Math.max(90, gapX - 44) },
-        { x: gapX + gapWidth, width: Math.max(90, canvas.width - (gapX + gapWidth) - 44) },
-      ],
+      segments: buildClimbSegmentsForFloor(mountain, floorIndex),
     });
   }
 
   floors.push({
     y: mountain.topGoalY,
-    segments: [{ x: 150, width: canvas.width - 300 }],
+    segments: [{ x: mountain.architecture.goalX, width: mountain.architecture.goalWidth }],
     goal: true,
   });
 
@@ -2638,7 +2729,7 @@ function drawClimb() {
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawClimbBackdrop(palette);
+  drawClimbBackdrop(climb.mountain, palette);
 
   ctx.save();
   ctx.translate(0, -climb.cameraY);
@@ -2665,25 +2756,99 @@ function drawClimb() {
   }
 }
 
-function drawClimbBackdrop(palette) {
+function drawClimbBackdrop(mountain, palette) {
+  const style = mountain.architecture.backdrop;
+  ctx.fillStyle = palette.skyline;
+
+  if (style === "peaks") {
+    for (let index = 0; index < 6; index += 1) {
+      const baseX = index * 175 - 30;
+      const peakWidth = 160 + (index % 2) * 44;
+      const peakHeight = 150 + (index % 3) * 54;
+      ctx.beginPath();
+      ctx.moveTo(baseX, canvas.height);
+      ctx.lineTo(baseX + peakWidth * 0.45, canvas.height - peakHeight);
+      ctx.lineTo(baseX + peakWidth, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+
+  if (style === "towers") {
+    for (let index = 0; index < 7; index += 1) {
+      const width = 42 + (index % 3) * 18;
+      const height = 170 + (index % 4) * 44;
+      const x = 70 + index * 120;
+      roundRect(ctx, x, canvas.height - height, width, height, 12);
+      ctx.fill();
+    }
+    return;
+  }
+
+  if (style === "arches") {
+    for (let index = 0; index < 5; index += 1) {
+      const width = 126 + (index % 2) * 18;
+      const height = 170 + (index % 3) * 36;
+      const x = 40 + index * 185;
+      ctx.fillRect(x, canvas.height - height, width, height);
+      ctx.clearRect(x + width * 0.28, canvas.height - height * 0.42, width * 0.44, height * 0.42);
+    }
+    return;
+  }
+
+  if (style === "cliffs") {
+    for (let index = 0; index < 6; index += 1) {
+      const x = 30 + index * 155;
+      const width = 108 + (index % 2) * 28;
+      const height = 180 + (index % 3) * 44;
+      ctx.beginPath();
+      ctx.moveTo(x, canvas.height);
+      ctx.lineTo(x + 16, canvas.height - height);
+      ctx.lineTo(x + width * 0.7, canvas.height - height + 14);
+      ctx.lineTo(x + width, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+
+  if (style === "crags") {
+    for (let index = 0; index < 7; index += 1) {
+      const x = index * 135 - 20;
+      const width = 90 + (index % 3) * 20;
+      const height = 150 + (index % 4) * 32;
+      ctx.beginPath();
+      ctx.moveTo(x, canvas.height);
+      ctx.lineTo(x + width * 0.2, canvas.height - height * 0.82);
+      ctx.lineTo(x + width * 0.55, canvas.height - height);
+      ctx.lineTo(x + width * 0.78, canvas.height - height * 0.58);
+      ctx.lineTo(x + width, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+
   for (let index = 0; index < 8; index += 1) {
     const x = 60 + index * 118;
     const width = 56 + (index % 3) * 18;
     const height = 160 + (index % 4) * 40;
-    ctx.fillStyle = palette.skyline;
     ctx.fillRect(x, canvas.height - height, width, height);
   }
 }
 
 function drawClimbGoal(mountain, palette) {
   const topY = mountain.topGoalY - 78;
+  const goalSegment = mountain.architecture;
+  const poleX = goalSegment.goalX + goalSegment.goalWidth * 0.5;
   ctx.fillStyle = "#f1f7ff";
-  ctx.fillRect(canvas.width / 2 - 6, topY, 12, 92);
+  ctx.fillRect(poleX - 6, topY, 12, 92);
   ctx.fillStyle = palette.goalBottom;
   ctx.beginPath();
-  ctx.moveTo(canvas.width / 2 + 6, topY + 10);
-  ctx.lineTo(canvas.width / 2 + 74, topY + 28);
-  ctx.lineTo(canvas.width / 2 + 6, topY + 46);
+  ctx.moveTo(poleX + 6, topY + 10);
+  ctx.lineTo(poleX + 74, topY + 28);
+  ctx.lineTo(poleX + 6, topY + 46);
   ctx.closePath();
   ctx.fill();
 }
