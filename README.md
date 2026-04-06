@@ -1,45 +1,66 @@
-# Majkens spelhåla
+# Majkens spelhala
 
-`Majkens spelhåla` is a browser game collection with two separate games:
+`Majkens spelhala` ar en samling browserbaserade Bosse-spel i ren HTML, CSS och JavaScript.
 
-- `Bosse Hoppar`: an endless runner where Bosse jumps over plush elephants, pets Sigge, and collects carrots.
-- `Bosse Vimsar`: a scrolling maze game where Bosse gathers carrots and avoids wandering elephants.
+## Spel
 
-The project also includes:
+- `Bosse Hoppar` ar en endless runner dar Bosse hoppar over elefanter, klappar Sigge och samlar morotter.
+- `Bosse Vimsar` ar ett labyrintspel med tio banor dar Bosse samlar morotter och undviker elefanter.
+- `Bosse pa is` ar ett hockeyspel i lodvy dar spelaren laddar skott och forsoker overlista malvakten.
+- `Bosse klattrar` ar ett plattformsspel med tio berg dar Bosse hoppar mellan hyllor, samlar morotter och tar sig upp till flaggan.
 
-- separate top-10 leaderboards for each game
-- optional Supabase-backed shared highscores
-- cheat codes for runner variants and events
-- mobile landscape fullscreen play, tap-to-jump, and joystick control in the maze
+Projektet innehaller ocksa:
 
-## Controls
+- separata topplistor per spel
+- fallback till lokal lagring om Supabase inte ar konfigurerat
+- mobilanpassade kontroller for varje spellage
+- cheatkoder for utvalda varianter i `Bosse Hoppar`
 
-- Desktop `Bosse Hoppar`: `Space`, `ArrowUp`, click, or tap
-- Desktop `Bosse Vimsar`: arrow keys or `WASD`
-- Mobile `Bosse Hoppar`: tap the game area in landscape
-- Mobile `Bosse Vimsar`: right-thumb joystick in landscape
-- Cheat dialog: press `C` on desktop or double-tap the score card on mobile
+## Kontroller
 
-## Run locally
+- Desktop `Bosse Hoppar`: `Space`, `ArrowUp`, klick eller tryck
+- Desktop `Bosse Vimsar`: piltangenter eller `WASD`
+- Desktop `Bosse pa is`: mus eller touch for att sikta och ladda skott
+- Desktop `Bosse klattrar`: `ArrowLeft` och `ArrowRight` eller `A` och `D` for sidled, `Space`, `W` eller `ArrowUp` for hopp och hopboost
+- Mobil `Bosse Hoppar`: tryck pa spelplanen
+- Mobil `Bosse Vimsar`: joystick med hoger tumme
+- Mobil `Bosse pa is`: dra pa spelplanen for att ladda och sikta skott
+- Mobil `Bosse klattrar`: vanster skarmhalva for hopp och dubbeltryck for boost, hoger tumme dras i sidled for rorelse
+- Cheatdialog: tryck `C` pa desktop eller dubbeltryck poangkortet pa mobil
 
-This project is plain HTML, CSS, and JavaScript.
+## Kora lokalt
 
-Open `index.html` directly in a browser, or serve the directory with a simple static server.
+Oppna `index.html` direkt i en webblasare eller servera katalogen med en enkel statisk server.
 
-## Supabase
+## Topplista och Supabase
 
-To enable shared leaderboards:
+For delade topplistor:
 
-1. Run `supabase-setup.sql` in your Supabase project.
-2. Fill in `supabase-config.js`.
-3. Publish the config file together with the app.
+1. Kor `supabase-setup.sql` i ditt Supabase-projekt.
+2. Fyll i `supabase-config.js` eller utga fran `supabase-config.example.js`.
+3. Publicera `supabase-config.js` tillsammans med appen.
 
-If Supabase is not configured, the game falls back to local browser storage for highscores.
+Om Supabase saknas anvands lokal lagring i webblasaren.
 
-## Files
+## Deploy
 
-- `index.html` - app structure, overlays, and script/style loading
-- `style.css` - visual design, mobile layout, and control presentation
-- `script.js` - game logic, rendering, controls, cheats, leaderboards, and Supabase integration
-- `supabase-config.js` - local Supabase project settings
-- `supabase-setup.sql` - database schema and policies for highscores
+`deploy.sh` publicerar appen till `bosse-hoppar` pa fjarrservern med miljo variabler fran den lokala `.env`-filen som scriptet refererar till.
+
+Publik deploy omfattar:
+
+- `index.html`
+- `style.css`
+- `script.js`
+- `supabase-config.js`
+- `assets/`
+
+## Projektfiler
+
+- `index.html` - appstruktur, overlays och script/style-laddning
+- `style.css` - layout, mobilanpassning och visuellt tema
+- `script.js` - spellogik, rendering, input, topplistor och Supabase-integration
+- `assets/crocodile-photo-sprite.png` - runtime-sprite for krokodil-cheaten i runner-laget
+- `deploy.sh` - publiceringsscript for produktionsmiljon
+- `supabase-config.example.js` - mall for lokal Supabase-konfiguration
+- `supabase-config.js` - faktisk Supabase-konfiguration for lokal eller publicerad miljo
+- `supabase-setup.sql` - databasstruktur och policyer for topplistor
