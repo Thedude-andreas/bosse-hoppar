@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-ENV_FILE="/Users/andreasmartensson/Library/CloudStorage/SynologyDrive-Synk/Projekt/Vibe/AMC/.env"
+SCRIPT_DIR="${0:A:h}"
+ENV_FILE="${DEPLOY_ENV_FILE:-$SCRIPT_DIR/.env.deploy}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing deploy env file: $ENV_FILE" >&2
