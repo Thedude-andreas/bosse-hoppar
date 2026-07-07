@@ -1,0 +1,42 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to run
+        required: true
+        type: choice
+        default: check
+        options:
+          - check
+          - deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install deploy tools
+        run: sudo apt-get update && sudo apt-get install -y lftp zsh
+
+      - name: Write deploy env
+        run: |
+          cat > .env.deploy <<'EOF'
+          DEPLOY_HOST=${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT=${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER=${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASS=${{ secrets.SFTP_PASS }}
+          DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}
+          EOF
+
+      - name: Check deploy target
+        run: ./deploy.sh --check
+
+      - name: Deploy
+        if: ${{ inputs.action == 'deploy' }}
+        run: ./deploy.sh
